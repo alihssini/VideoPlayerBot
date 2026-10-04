@@ -1,0 +1,15 @@
+[Unit]
+Description=VideoPlayerBot (Telegram user account)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/root/VideoPlayerBot
+Environment=PATH=/root/VideoPlayerBot/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/root/VideoPlayerBot/.venv/bin/python main.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

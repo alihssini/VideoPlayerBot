@@ -1,8 +1,10 @@
-tgcrypto
-requests
-youtube_dl
-ffmpeg-python
-python-dotenv
-pytgcalls==3.0.0.dev21
-youtube_search_python==1.4.9
-git+https://github.com/AsmSafone/pyrogram@master
+# Python 3.12 is required. Install with ./setup.sh (it also installs ffmpeg, which is needed too).
+# Pinned to the versions this project was tested with.
+kurigram==2.2.26
+py-tgcalls==3.0.0
+tgcrypto==1.2.5
+python-dotenv==1.2.4
+# YouTube changes often: keep yt-dlp current (see manual.md, section "Update")
+yt-dlp[default]>=2026.8.19
+# JavaScript runtime that yt-dlp needs for YouTube
+deno==2.9.7

@@ -6,3 +6,8 @@
 *.session-journal
 unknown_errors.txt
 test.py
+
+sessions/
+downloads/
+.venv/
+assets/profile.jpg

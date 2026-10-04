@@ -26,16 +26,36 @@ admins = {}
 OLD_PMS = {}
 AUDIO_CALL = {}
 VIDEO_CALL = {}
-API_ID = int(getenv("API_ID", ""))
-API_HASH = getenv("API_HASH", "")
-BOT_TOKEN = getenv("BOT_TOKEN", "")
-SESSION_STRING = getenv("SESSION_STRING", "")
-SUPPORT_GROUP = getenv("SUPPORT_GROUP", "AsmSupport")
-UPDATES_CHANNEL = getenv("UPDATES_CHANNEL", "AsmSafone")
-ASSISTANT_NAME = getenv("ASSISTANT_NAME", "MyVideoPlayer")
-SUDO_USERS = list(map(int, getenv("SUDO_USERS").split()))
-REPLY_MESSAGE = getenv("REPLY_MESSAGE", "")
-if not REPLY_MESSAGE:
-    REPLY_MESSAGE = None
-else:
-    REPLY_MESSAGE = REPLY_MESSAGE
+
+
+def _required(name: str) -> str:
+    value = (getenv(name) or "").strip()
+    if not value:
+        raise SystemExit(
+            f"[ERROR] - {name} is missing in .env (get API_ID / API_HASH from https://my.telegram.org)"
+        )
+    return value
+
+
+# Telegram user-account login (no bot token needed)
+API_ID = int(_required("API_ID"))
+API_HASH = _required("API_HASH")
+PHONE_NUMBER = (getenv("PHONE_NUMBER") or "").strip() or None  # optional, otherwise asked at login
+SESSION_NAME = (getenv("SESSION_NAME") or "user").strip()
+SESSION_DIR = (getenv("SESSION_DIR") or "sessions").strip()
+
+# Besides the logged-in account itself, these user IDs may control playback
+_sudo = (getenv("SUDO_USERS") or getenv("SUDOERS") or "").replace(",", " ")
+SUDO_USERS = [int(x) for x in _sudo.split() if x.lstrip("-").isdigit()]
+
+# Prefixes accepted for commands, e.g. /play  !play  .play
+COMMAND_PREFIXES = ["/", "!", "."]
+
+# Optional text auto-reply to incoming private messages (disabled when empty)
+REPLY_MESSAGE = (getenv("REPLY_MESSAGE") or "").strip() or None
+
+# Max size (MB) of a single downloaded video/audio file; bigger ones are refused to protect the disk
+DOWNLOAD_MAX_MB = int(getenv("DOWNLOAD_MAX_MB") or 1000)
+
+# Video quality preset: SD_360p (default, light on CPU), SD_480p, HD_720p, FHD_1080p
+VIDEO_QUALITY = (getenv("VIDEO_QUALITY") or "SD_360p").strip()

@@ -17,25 +17,43 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>
 """
 
 import os
-from plugins.nopm import User
-from pyrogram import Client, idle
-from config import API_ID, API_HASH, BOT_TOKEN
+import sys
+import asyncio
+import importlib
+from pyrogram import idle
+from helpers.user import User, SESSION_FILE
+from helpers.voice import call_py
+from helpers.media import profile_photo
+from helpers.ytdl import wipe_downloads, sweeper
 
-Bot = Client(
-    ":memory:",
-    API_ID,
-    API_HASH,
-    bot_token=BOT_TOKEN,
-    plugins=dict(root="plugins"),
-)
+if not os.path.isfile(SESSION_FILE):
+    sys.exit("[ERROR] - Not logged in yet. Run `.venv/bin/python login.py` once to log in with your Telegram account.")
+
+# registers all command handlers on the user client
+for _plugin in ("nopm", "private", "stream", "download"):
+    importlib.import_module(f"plugins.{_plugin}")
+
 if not os.path.isdir("./downloads"):
     os.makedirs("./downloads")
+wipe_downloads()  # nothing is playing at startup, so leftovers are stale
 
-Bot.start()
-User.start()
-print("\n[INFO] - STARTED VIDEO PLAYER BOT, JOIN @ASMSAFONE !")
 
-idle()
-Bot.stop()
-User.stop()
-print("\n[INFO] - STOPPED VIDEO PLAYER BOT, JOIN @ASMSAFONE !")
+async def main():
+    try:
+        await call_py.start()  # also starts the Telegram client
+    except EOFError:
+        sys.exit("[ERROR] - Session is no longer valid and needs a new login. Run `.venv/bin/python login.py`.")
+
+    me = await User.get_me()
+    print(f"\n[INFO] - STARTED VIDEO PLAYER as {me.first_name} (id {me.id}) !")
+
+    photo = await profile_photo(User)
+    print(f"[INFO] - fallback picture for the now-playing card: {photo or "none (text-only)"}")
+
+    asyncio.create_task(sweeper())  # periodic cleanup of stale files in ./downloads
+    await idle()
+    await User.stop()
+    print("\n[INFO] - STOPPED VIDEO PLAYER !")
+
+
+asyncio.get_event_loop().run_until_complete(main())

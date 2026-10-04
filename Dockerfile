@@ -1,13 +1,15 @@
-FROM debian:latest
+FROM python:3.12-slim
 
-RUN apt update && apt upgrade -y
-RUN apt install git python3-pip ffmpeg -y
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir /safone/
-WORKDIR /safone/
-COPY . /safone/
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
 
-RUN pip3 install --upgrade pip
-RUN pip3 install -U -r requirements.txt
+# the Telegram login lives here: keep it in a volume and run `python login.py` once
+# (docker run -it -v vpb-sessions:/app/sessions --env-file .env <image> python login.py)
+VOLUME ["/app/sessions"]
 
-CMD python3 main.py
+CMD ["python", "main.py"]

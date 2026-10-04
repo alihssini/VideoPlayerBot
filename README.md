@@ -1,74 +1,72 @@
-# Telegram Video Player Bot [![Mentioned in Awesome](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/tgcalls/awesome-tgcalls)
-![GitHub Repo stars](https://img.shields.io/github/stars/AsmSafone/VideoPlayerBot?color=blue&style=flat)
-![GitHub forks](https://img.shields.io/github/forks/AsmSafone/VideoPlayerBot?color=green&style=flat)
-![GitHub issues](https://img.shields.io/github/issues/AsmSafone/VideoPlayerBot)
-![GitHub closed issues](https://img.shields.io/github/issues-closed/AsmSafone/VideoPlayerBot)
-![GitHub pull requests](https://img.shields.io/github/issues-pr/AsmSafone/VideoPlayerBot)
-![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed/AsmSafone/VideoPlayerBot)
-![GitHub contributors](https://img.shields.io/github/contributors/AsmSafone/VideoPlayerBot?style=flat)
-![GitHub repo size](https://img.shields.io/github/repo-size/AsmSafone/VideoPlayerBot?color=red)
-![GitHub commit activity](https://img.shields.io/github/commit-activity/m/AsmSafone/VideoPlayerBot)
-![GitHub](https://img.shields.io/github/license/AsmSafone/VideoPlayerBot)
-[![Bot Updates](https://img.shields.io/badge/VideoPlayerBot-Updates%20Channel-green)](https://t.me/AsmSafone)
-[![Bot Support](https://img.shields.io/badge/VideoPlayerBot-Support%20Group-blue)](https://t.me/safothebot)
+# Telegram Video Player Bot
 
-An Telegram Bot By [@AsmSafone](https://t.me/AsmSafone) To Stream Videos in Telegram Voice Chat.
+Plays video and audio in Telegram **group voice chats** from a normal **Telegram user account** (no bot token).
+Based on [AsmSafone/VideoPlayerBot](https://github.com/AsmSafone/VideoPlayerBot), rebuilt on Kurigram, py-tgcalls 3 and yt-dlp.
+See [manual.md](manual.md) for the full guide.
 
-## Main Features
+## Features
 
-- Supports Live Streaming.
-- Supports YouTube Streaming.
-- Supports Live Radio Streaming.
-- Supports Video Files Streaming.
-- Supports YouTube Live Streaming.
-- User Account Protection (PM Guard)
+- Plays **songs by name**: `/play daft punk get lucky` finds it on YouTube and plays the audio.
+- Plays YouTube videos, YouTube live streams, live radio / direct links and Telegram audio / video files.
+- `/play` detects audio or video itself; `/play video <name or link>` forces video.
+- Now-playing card with title, artwork, play state and the available commands.
+- `/download` sends the song (mp3) or video (mp4) as a file in the chat.
+- All command names are configurable in `commandmapper.py`.
+- Optional private-message auto reply (PM guard).
 
-## Deploy Own Bot
+## Commands
 
-### Railway (Recommended)
-<p><a href="https://railway.app/new/template?template=https%3A%2F%2Fgithub.com%2FAsmSafone%2FVideoPlayerBot&envs=API_ID%2CAPI_HASH%2CBOT_TOKEN%2CSESSION_STRING%2CASSISTANT_NAME%2CSUDO_USERS%2CREPLY_MESSAGE%2CSUPPORT_GROUP%2CUPDATES_CHANNEL&optionalEnvs=REPLY_MESSAGE%2CSUPPORT_GROUP%2CUPDATES_CHANNEL&API_IDDesc=User+Account+Telegram+API_ID+get+it+from+my.telegram.org%2Fapps&API_HASHDesc=User+Account+Telegram+API_HASH+get+it+from+my.telegram.org%2Fapps&BOT_TOKENDesc=Your+Telegram+Bot+Token%2C+get+it+from+%40Botfather+XD&SESSION_STRINGDesc=Pyrogram+Session+String+of+User+Account%2C+get+it+from+%40genStr_robot&ASSISTANT_NAMEDesc=Your+Video+Player%27s+assistant+username+without+%40&SUDO_USERSDesc=ID+of+Sudo+Users+who+can+use+Admin+commands+%28for+multiple+users+seperated+by+space%29&REPLY_MESSAGEDesc=A+reply+message+to+those+who+message+the+USER+account+in+PM.+Make+it+blank+if+you+do+not+need+this+feature.&SUPPORT_GROUPDesc=Support+Group+username+without+%40+%5BLeave+this+if+you+don%27t+have+one%5D&UPDATES_CHANNELDesc=Updates+Channel+username+without+%40+%5BLeave+this+if+you+don%27t+have+one%5D&SUPPORT_GROUPDefault=SafoTheBot&UPDATES_CHANNELDefault=AsmSafone&REPLY_MESSAGEDefault=Hello+Sir%2C+I%27m+a+bot+to+stream+videos+on+telegram+voice+chat%2C+not+having+time+to+chat+with+you+%F0%9F%98%82%21&referralCode=SAFONE"><img src="https://img.shields.io/badge/Deploy%20To%20Railway-blueviolet?style=for-the-badge&logo=railway" width="200""/></a></p>
+Work with `/`, `!` or `.`, only from the logged-in account and the `SUDO_USERS`.
 
-### Heroku (Don't Complain)
-<p><a href="https://heroku.com/deploy?template=https://github.com/AsmSafone/VideoPlayerBot"><img src="https://img.shields.io/badge/Deploy%20To%20Heroku-blueviolet?style=for-the-badge&logo=heroku" width="200""/></a></p>
-
-## Commands (Set In Botfather)
 ```sh
-start - Start The Bot
-help - Show Help Message
-play - Start Audio Streaming
-stream - Start Video Streaming
-pause - Pause The Current Stream
-resume - Resume The Paused Stream
-endstream - Stop Streaming & Left VC
+/play <song name or link>        - Play audio (links: audio or video is detected)
+/play video <name or link>       - Play as video
+/play audio <name or link>       - Force audio only
+reply to audio/video + /play     - Play that file
+/stream                          - Same as /play video
+/pause                           - Pause the current stream
+/resume                          - Resume the paused stream
+/end                             - Stop streaming & leave the voice chat
+/download <song name or link>    - Send the song as an mp3 file
+/download video <name or link>   - Send the video as an mp4 file
+/restart                         - Restart the app
+/help, /start, /about            - Info
 ```
 
-## Config Vars
-1. `API_ID` : User Account Telegram API_ID, get it from my.telegram.org
-2. `API_HASH` : User Account Telegram API_HASH, get it from my.telegram.org
-3. `BOT_TOKEN` : Your Telegram Bot Token, get it from @Botfather XD
-4. `SESSION_STRING` : Pyrogram Session String of User Account, get it from [@genStr robot](http://t.me/genStr_robot) or [![genStr](https://img.shields.io/badge/repl.it-genStr-yellowgreen)](https://repl.it/@AsmSafone/genStr)
-5. `ASSISTANT_NAME` : Your Video Player's assistant username without @.
-6. `SUPPORT_GROUP` : Support Group username without @ [Leave this if you don't have one]
-7. `UPDATES_CHANNEL` : Updates Channel username without @ [Leave this if you don't have one]
-8. `SUDO_USERS` : ID of Users who can use Admins commands (for multiple users seperated by space)
-9. `REPLY_MESSAGE` : A reply to those who message the USER account in PM. Leave it blank if you do not need this feature.
+## Setup
 
-## Requirements
-- Python 3.6 or Higher.
-- Latest [FFmpeg Python](https://www.ffmpeg.org/).
-- [Telegram API key](https://docs.pyrogram.org/intro/quickstart#enjoy-the-api).
-- Pyrogram [String Session](http://t.me/genStr_robot) Of The Account.
-- The User Account Needs To Be An Admin In The Group / Channel.
+Needs Debian/Ubuntu, Python 3.12 (installed by the script), ffmpeg and a Telegram account with API credentials
+from <https://my.telegram.org> (*API development tools*).
 
-## Self Host
 ```sh
-$ git clone -b main https://github.com/AsmSafone/VideoPlayerBot
-$ cd VideoPlayerBot
-$ sudo apt-get install python3-pip ffmpeg
-$ pip3 install -U pip
-$ pip3 install -U -r requirements.txt
-# <create .env variables appropriately>
-$ python3 main.py
+git clone https://github.com/AsmSafone/VideoPlayerBot && cd VideoPlayerBot   # or copy your own checkout
+./setup.sh                          # ffmpeg, uv, Python 3.12 venv, dependencies, .env from .env.sample
+nano .env                           # API_ID, API_HASH, SUDO_USERS ...
+.venv/bin/python login.py           # once: log in with the code Telegram sends you
+.venv/bin/python main.py            # run (or install the systemd service, see manual.md)
+```
+
+Add the account to a group, start a voice chat there, and send `/play <song>`.
+Run only **one** program per Telegram session: a second client with the same session silently stops receiving messages.
+
+## Config (.env)
+
+| Variable | Meaning |
+|---|---|
+| `API_ID`, `API_HASH` | required, from my.telegram.org |
+| `PHONE_NUMBER` | optional, otherwise asked at login |
+| `SUDO_USERS` | user IDs (space separated) allowed to run commands besides the account itself |
+| `VIDEO_QUALITY` | `SD_360p` (default), `SD_480p`, `HD_720p`, `FHD_1080p` |
+| `DOWNLOAD_MAX_MB` | max file size for streaming and `/download` (default 1000) |
+| `SEARCH_MAX_MINUTES` | name searches skip longer results (default 15) |
+| `REPLY_MESSAGE` | optional auto reply to private messages |
+
+## Docker
+
+```sh
+docker build -t videoplayerbot .
+docker run -it --rm -v vpb-sessions:/app/sessions --env-file .env videoplayerbot python login.py   # once
+docker run -d --restart unless-stopped -v vpb-sessions:/app/sessions --env-file .env videoplayerbot
 ```
 
 ## License
@@ -92,7 +90,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 ## Credits
 
-- [Me](https://github.com/AsmSafone) for [Noting](https://github.com/AsmSafone/VideoPlayerBot) 😬
-- [Dan](https://github.com/delivrance) for [Pyrogram](https://github.com/pyrogram/pyrogram) ❤️
-- [MarshalX](https://github.com/MarshalX) for [pytgcalls](https://github.com/MarshalX/tgcalls) ❤️
-- And Thanks To All [Contributors](https://github.com/AsmSafone/VideoPlayerBot/graphs/contributors)! ❤️
+- [Asm Safone](https://github.com/AsmSafone) for the original [VideoPlayerBot](https://github.com/AsmSafone/VideoPlayerBot)
+- [Dan](https://github.com/delivrance) for [Pyrogram](https://github.com/pyrogram/pyrogram) and the [Kurigram](https://github.com/KurimuzonAkuma/kurigram) fork
+- [MarshalX](https://github.com/MarshalX) and [Laky-64](https://github.com/Laky-64) for pytgcalls / ntgcalls
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) contributors
