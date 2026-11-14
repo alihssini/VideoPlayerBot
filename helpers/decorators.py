@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>
 import functools
 from typing import Callable
 from pyrogram import Client
-from config import SUDO_USERS
+from config import SUDO_USERS, OWNER_USERS
 from pyrogram.types import Message
 
 
@@ -29,6 +29,14 @@ def _is_authorized(message: Message) -> bool:
         return True
     user = message.from_user
     return bool(user and (user.is_self or user.id in SUDO_USERS))
+
+
+def _is_owner(message: Message) -> bool:
+    """The logged-in account itself and the OWNER_USERS may manage the groups of the bot."""
+    if message.outgoing:
+        return True
+    user = message.from_user
+    return bool(user and (user.is_self or user.id in OWNER_USERS))
 
 
 def errors(func: Callable) -> Callable:
@@ -55,6 +63,15 @@ def sudo_users_only(func: Callable) -> Callable:
     @functools.wraps(func)
     async def decorator(client: Client, message: Message):
         if _is_authorized(message):
+            return await func(client, message)
+
+    return decorator
+
+
+def owner_only(func: Callable) -> Callable:
+    @functools.wraps(func)
+    async def decorator(client: Client, message: Message):
+        if _is_owner(message):
             return await func(client, message)
 
     return decorator

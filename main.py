@@ -30,7 +30,7 @@ if not os.path.isfile(SESSION_FILE):
     sys.exit("[ERROR] - Not logged in yet. Run `.venv/bin/python login.py` once to log in with your Telegram account.")
 
 # registers all command handlers on the user client
-for _plugin in ("nopm", "private", "stream", "download"):
+for _plugin in ("nopm", "private", "stream", "download", "owner", "sudo", "dmplay"):
     importlib.import_module(f"plugins.{_plugin}")
 
 if not os.path.isdir("./downloads"):

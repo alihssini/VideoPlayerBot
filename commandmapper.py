@@ -18,7 +18,21 @@ COMMANDS = {
     "resume":    ["resume", "ادامه"],     # resume a paused stream
     "end":       ["end", "اتمام"],  # stop the stream and leave the voice chat
     "download":  ["download", "دانلود"],  # download the song / video and send the file in chat
+    "next":      ["next", "skip", "بعدی"],  # skip to the next queued item
+    "queue":     ["queue", "صف"],         # show what plays and what waits
+    "jump":      ["jump", "seek", "پرش"],    # move in the media: /jump 30 or /jump +30s (ahead), /jump -10 (back), units s / m / h
+    "lyrics":    ["lyrics", "lyric", "متن", "شعر"],  # play a song as a video with its synced lyrics: /lyrics <song name>, or /lyrics alone for the song that plays now
+    "loop":      ["loop", "repeat", "تکرار"],  # repeat the current media: /loop (on / off toggle), /loop on, /loop off
+    "vol":       ["vol", "volume", "صدا"],   # voice chat volume of the bot: /vol 80 (1-200, 100 = normal)
+    "delete":    ["delete", "del", "حذف"],   # delete the bot's messages (all of them, or only the replied one)
     "restart":   ["restart", "ریستارت"],    # restart the app
+    "list":      ["list", "لیست"],       # owners only, in private chat: numbered list of the joined groups
+    "join":      ["join", "ورود"],       # owners only: join a group by invite link or @username
+    "leave":     ["leave", "خروج"],      # owners only: leave the group with that list number, or the current group when sent inside one
+    "sudolist":  ["admins", "ادمینها"],   # owners only: numbered list of the SUDO users (names fetched from Telegram)
+    "addsudo":   ["promote", "ارتقا", "ترفیع"],   # owners only: add a SUDO user by reply, id or @username
+    "delsudo":   ["demote", "عزل"],    # owners only: remove a SUDO user by reply, list number, id or @username
+    "id":        ["id", "آیدی"],          # anyone, private chat only: replies with the sender's Telegram number
     "start":     ["start", "استارت"],      # short intro text
     "help":      ["help", "راهنما"],       # list of commands
     "about":     ["about", "درباره"],      # information about the app
@@ -69,6 +83,20 @@ def label(key: str) -> str:
 def tag(key: str) -> str:
     """label() wrapped in markdown code, e.g. `/play`."""
     return f"`{label(key)}`"
+
+
+def alt(key: str) -> str:
+    """The other names of a command for the help text, e.g. " (also `/skip`, `/بعدی`)", or "" when it has none."""
+    others = COMMANDS[key][1:]
+    if not others:
+        return ""
+    return " (also " + ", ".join(f"`{COMMAND_PREFIXES[0]}{n}`" for n in others) + ")"
+
+
+def mode_alt(mode: str) -> str:
+    """Other words for a mode for the help text, e.g. " (also `ویدیو`)", or ""."""
+    others = MODES[mode][1:]
+    return " (also " + ", ".join(f"`{n}`" for n in others) + ")" if others else ""
 
 
 def mode_of(word: str):

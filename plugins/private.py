@@ -40,3 +40,16 @@ async def help_(client, message):
 @authorized_users_only
 async def about(client, message):
     await message.reply_text(ABOUT_TEXT)
+
+
+# Open to everyone, but only in private chat: tells the sender their own Telegram number.
+# group=-1 so it always runs, also when the PM auto reply (nopm) matches the same message.
+@User.on_message(filters.private & filters.command(names("id"), prefixes=COMMAND_PREFIXES), group=-1)
+async def my_id(client, message):
+    user = message.from_user
+    if not user:
+        return
+    try:
+        await message.reply_text(f"🆔 Your Telegram ID: `{user.id}`")
+    except Exception as e:
+        print(f"[WARN] - /id reply failed: {e}")

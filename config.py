@@ -48,6 +48,10 @@ SESSION_DIR = (getenv("SESSION_DIR") or "sessions").strip()
 _sudo = (getenv("SUDO_USERS") or getenv("SUDOERS") or "").replace(",", " ")
 SUDO_USERS = [int(x) for x in _sudo.split() if x.lstrip("-").isdigit()]
 
+# Owners (plus the logged-in account itself) may manage the groups of the bot: list / join / leave
+_owner = (getenv("OWNER_USERS") or getenv("OWNERS") or "").replace(",", " ")
+OWNER_USERS = [int(x) for x in _owner.split() if x.lstrip("-").isdigit()]
+
 # Prefixes accepted for commands, e.g. /play  !play  .play
 COMMAND_PREFIXES = ["/", "!", "."]
 
