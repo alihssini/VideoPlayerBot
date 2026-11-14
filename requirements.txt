@@ -5,6 +5,7 @@ py-tgcalls==3.0.0
 tgcrypto==1.2.5
 python-dotenv==1.2.4
 # YouTube changes often: keep yt-dlp current (see manual.md, section "Update")
-yt-dlp[default]>=2026.8.19
+# Pinned: 2026.10.21 returns YouTube stream URLs that ffprobe gets HTTP 403 on (lyrics/duration breaks). Re-test before raising.
+yt-dlp[default]==2026.8.19
 # JavaScript runtime that yt-dlp needs for YouTube
 deno==2.9.7

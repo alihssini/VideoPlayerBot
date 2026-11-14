@@ -11,3 +11,10 @@ sessions/
 downloads/
 .venv/
 assets/profile.jpg
+
+# secrets and local state: never commit
+.env.*
+!.env.sample
+*.bak
+backups/
+__pycache__/

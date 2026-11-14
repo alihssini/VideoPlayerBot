@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+# ffmpeg with libass + fonts (Vazirmatn covers Persian / Arabic) for the lyrics videos
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fontconfig fonts-dejavu-core fonts-vazirmatn \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
