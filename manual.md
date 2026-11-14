@@ -29,7 +29,7 @@ cd /root/VideoPlayerBot
 ./setup.sh
 ```
 
-`setup.sh` runs `apt-get install ffmpeg git curl`, installs `uv`, creates `.venv` (Python 3.12) and runs
+`setup.sh` runs `apt-get install ffmpeg git curl fontconfig fonts-dejavu-core fonts-vazirmatn` (the font is downloaded into `assets/fonts` when the package does not exist), installs `uv`, creates `.venv` (Python 3.12) and runs
 `uv pip install -r requirements.txt` (kurigram, py-tgcalls, tgcrypto, python-dotenv, yt-dlp[default], deno).
 `deno` is needed by yt-dlp to solve YouTube JavaScript challenges; the app finds it in `.venv/bin` by itself.
 Dependencies are pinned in `requirements.txt` (only yt-dlp has a minimum version, because YouTube changes often).
@@ -45,6 +45,7 @@ nano .env          # created from .env.sample by setup.sh
 | `API_ID`, `API_HASH` | yes | from my.telegram.org |
 | `PHONE_NUMBER` | no | e.g. `+49123456789`; if empty it is asked during login |
 | `SUDO_USERS` | no | user IDs (space separated) that may control the bot besides the logged-in account |
+| `OWNER_USERS` | no | user IDs (space separated) that may manage the bot's groups (`/list`, `/join`, `/leave`) besides the logged-in account |
 | `VIDEO_QUALITY` | no | `SD_360p` (default), `SD_480p`, `HD_720p`, `FHD_1080p` – higher needs more CPU |
 | `DOWNLOAD_MAX_MB` | no | refuse files bigger than this, for streaming and `/download` (default 1000) |
 | `SEARCH_MAX_MINUTES` | no | name searches skip results longer than this (default 15) |
@@ -110,15 +111,31 @@ and only from the logged-in account itself and the `SUDO_USERS`:
 | `/play audio <name or link>` | force audio only |
 | `/stream` | same as `/play video` |
 | `/pause`, `/resume` | pause / resume |
-| `/end` | stop and leave the voice chat |
+| `/next` (alias `/skip`) | skip to the next queued item |
+| `/queue` | show what is playing and what waits in the queue |
+| `/end` | stop, clear the queue and leave the voice chat |
 | `/download <song name or link>` | send the song as an **mp3** file in the chat (works in groups and private chats) |
 | `/download video <name or link>` | send the **mp4** video (max 720p) in the chat |
 | `/restart` | restart the app |
+| `/list` | **owners only**, in private chat: numbered list of the joined groups (fixed order until the next `/list`) |
+| `/play <number>` / `/play <number> <link or song name>` | **owners only**, in private chat: send the bot a link, audio or video, reply to it with `/play <number>` (number of `/list`) and it plays in that group's voice chat; it is queued when the group already plays. `/stream <number>` forces video |
+| `/join <invite link or @username>` | **owners only**: join that group |
+| `/id` | **everyone**, private chat only: replies with the sender's Telegram number (also `/آیدی`) |
+| `/admins` | **owners only**, in groups and private chat: numbered list of the SUDO users with names (also `/ادمینها`) |
+| `/promote <id or @username>` (`/ارتقا`, `/ترفیع`) | **owners only**: add a SUDO user; or reply to the person's message with `/addsudo`. Applies at once and is saved to `.env` (`.env` backup in `~/backups`) |
+| `/demote <number, id or @username>` (`/عزل`) | **owners only**: remove a SUDO user (number from `/admins`); or reply to the person's message |
+| `/leave <number>` | **owners only**: leave the group with that number of `/list`; sent inside a group without a number it leaves that group at once |
 | `/help`, `/start`, `/about` | info |
 
 - `/play` posts a **now-playing card** with the title and a picture (track artwork or the video's thumbnail;
   the account's profile picture if there is none), the play state (▶️ Playing, ⏸ Paused, ⏹ Stopped, ✅ Finished)
   and the list of available commands.
+- **Queue:** while something plays, `/play` and `/stream` (name, link or replied file) add the new item to the
+  queue instead of replacing the current one. When a stream ends, the next queued item starts by itself and gets its
+  own card; after the last one the bot leaves the voice chat. `/next` skips the current item, `/queue` lists them,
+  `/end` stops everything and clears the queue. Items that fail to start are skipped with a message.
+  The queue is per group, kept in memory (lost on restart) and limited by `MAX_QUEUE` in `.env` (default 10).
+  Queued YouTube videos are downloaded when they are added, so they use disk space until they are played.
 - Name searches skip live streams and prefer results up to `SEARCH_MAX_MINUTES` minutes.
 - YouTube videos are downloaded (max 720p, merged by yt-dlp) and then streamed; YouTube live streams
   and radio links are streamed directly. `/download` refuses live streams.
@@ -196,7 +213,7 @@ helpers/ytdl.py         yt-dlp helpers: stream links, name search, file download
 helpers/media.py        ffprobe audio/video detection, thumbnails, profile picture
 helpers/download.py     Telegram download with progress, stall detection and timeouts
 helpers/decorators.py   authorization (logged-in account + SUDO_USERS)
-plugins/stream.py       /play /stream /pause /resume /end /restart + stream-end handling + now-playing card
+plugins/stream.py       /play /stream /next /queue /pause /resume /end /restart + queue + stream-end handling + now-playing card
 plugins/download.py     /download
 plugins/private.py      /start /help /about
 plugins/nopm.py         optional private-message auto reply
@@ -204,3 +221,18 @@ deploy/videoplayerbot.service   systemd unit
 Dockerfile              optional container image (the login must be created once inside the sessions volume)
 assets/, helpers/admins.py      unused leftovers of the original project; assets/profile.jpg is a runtime cache
 ```
+
+## Progress bar, jump, volume, delete
+
+- The now-playing card shows `elapsed bar total` and refreshes every PROGRESS_EVERY seconds (default 10, set in .env). Live streams show only the elapsed time. The command list is no longer printed under the card.
+- `/jump <time>` moves in the current media (aliases: seek). The time is a number with an optional unit: s = seconds (default), m = minutes, h = hours. No sign or `+` goes ahead, `-` goes back. Examples: `/jump 30`, `/jump +30s`, `/jump 5m`, `/jump -10`, `/jump -40s`, `/jump 1h`.
+- `/loop` (aliases: repeat) repeats the media that plays now, again and again; send it again (or `/loop off`) to stop. Starting another item (/next, the queue moving on) switches it off. The card shows 🔁 while it is on. Not possible on live streams.
+- `/vol <1-200>` (alias: volume) sets the bot's volume in the voice chat, 100 = normal. It is applied with an ffmpeg audio filter (Telegram ignores the volume of the bot own audio), so changing it restarts the running track at the same position, with a short gap. Without a number it shows the current value. The value is kept per chat and applied to every new track until the app restarts.
+- `/delete` (alias: del) deletes all messages the bot sent in the chat (only those it sent itself, up to the last 300 since the last restart, never your normal messages). Reply to one message with it to delete only that message.
+- Not possible on live streams, and not past the end of the media (use /next or /end).
+- Names can be changed in commandmapper.py.
+- `/lyrics <song name or link>` (aliases: lyric) finds the song like `/play` does, looks up time-synced lyrics on LRCLIB and plays the song as a video: blurred cover (or a dark background), the current line big in the middle, the previous / next line dimmed, title and artist on top. The lyrics are burned into the video by ffmpeg, so `/pause`, `/jump`, `/loop` and `/vol` keep them in sync. When no synced lyrics are found (or the song is longer than LYRICS_MAX_MINUTES, or it has no title), the song just plays as audio and the bot says why.
+- `/lyrics` without a name converts the song that plays now: the video starts at the current position and replaces the audio stream.
+- The search uses the title that is shown on the card (cleaned from "(Official Video)", "[HD]", "feat." ...) as `Artist - Song` or free text and needs the song length to be within LYRICS_TOLERANCE seconds of the lyrics. Titles in Persian script are normalised (Arabic letter forms, diacritics, ZWNJ) and searched several ways, and many are found (LRCLIB links some Persian names to its transliterated entries), but not all: its entries are mostly in English letters, and `Googoosh - Parandeh` works where the same in Persian letters does not. When nothing is found the bot suggests the English-letter form `/lyrics Artist - Song`; the lyrics themselves can be Persian.
+- Persian / Arabic text: libass shapes and reorders it (HarfBuzz + FriBidi) and the **Vazirmatn** font covers the letters. On a fresh install `setup.sh` / the Dockerfile install it. Another font can be used with LYRICS_FONT in `.env` (put its .ttf into `assets/fonts` if it is not installed system-wide).
+- Needs ffmpeg built with libass (the Debian / Ubuntu packages are) and internet access to lrclib.net. Rendering takes a few seconds, the video is 640x360 at 10 fps and deleted like any other temp file.
