@@ -46,6 +46,22 @@ async def probe(source, timeout=25):
     }
 
 
+async def duration(source, timeout=15):
+    """Length in seconds of a file or URL, or None for live streams / unreadable sources."""
+    try:
+        rc, out = await _run(
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", str(source),
+            timeout=timeout,
+        )
+        if rc != 0:
+            return None
+        value = float(out.decode().strip().splitlines()[0])
+    except Exception:
+        return None
+    return value if value > 0 else None
+
+
 async def to_jpg(source, timeout=25, width=640):
     """First picture of a file or URL (embedded cover art, a video frame, a .webp/.png thumbnail)
     as a JPEG in ./downloads. Returns the path or None."""

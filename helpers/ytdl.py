@@ -41,12 +41,39 @@ def _in_downloads(path) -> bool:
         return False
 
 
+PROTECTED = set()  # files of queued items: nothing may delete them until they are played or dropped
+
+
+def _abs(path):
+    return os.path.abspath(path) if path and _in_downloads(path) else None
+
+
+def protect_file(path) -> None:
+    p = _abs(path)
+    if p:
+        PROTECTED.add(p)
+
+
+def unprotect_file(path) -> None:
+    p = _abs(path)
+    if p:
+        PROTECTED.discard(p)
+
+
 def remove_file(path) -> None:
-    if path and _in_downloads(path):
+    p = _abs(path)
+    if p and p not in PROTECTED:
         try:
-            os.remove(path)
+            os.remove(p)
         except OSError:
             pass
+
+
+def drop_file(path) -> None:
+    """Delete a file nobody needs, unless a running stream or a queued item still uses it."""
+    p = _abs(path)
+    if p and p not in set(FILES.values()):
+        remove_file(p)
 
 
 def swap_tracked_file(chat_id, new_path) -> None:
@@ -75,7 +102,7 @@ def sweep_downloads() -> None:
     """Delete stale files (old thumbnails, aborted *.part/*.temp downloads) that no stream uses."""
     if not os.path.isdir(DOWNLOAD_DIR):
         return
-    in_use = set(FILES.values())
+    in_use = set(FILES.values()) | PROTECTED
     cutoff = time.time() - MAX_AGE
     for name in os.listdir(DOWNLOAD_DIR):
         path = os.path.abspath(os.path.join(DOWNLOAD_DIR, name))
