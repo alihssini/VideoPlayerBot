@@ -80,10 +80,13 @@ Run only **one** program per Telegram session: a second client with the same ses
 | `DOWNLOAD_MAX_MB` | max file size for streaming and `/download` (default 1000) |
 | `SEARCH_MAX_MINUTES` | name searches skip longer results (default 15) |
 | `REPLY_MESSAGE` | optional auto reply to private messages |
+| `SESSION_NAME`, `SESSION_DIR` | session file name / folder (default `user`, `sessions`) |
+| `MAX_QUEUE` | items that may wait in the queue of one group (default 10) |
 | `PROGRESS_EVERY` | seconds between progress bar updates (default 10) |
 | `LYRICS_MAX_MINUTES` | longer songs play without lyrics (default 15) |
 | `LYRICS_TOLERANCE` | allowed length difference in seconds between the song and the found lyrics (default 10) |
 | `LYRICS_FONT` | font of the lyrics (default `Vazirmatn`, Latin + Persian/Arabic) |
+| `LRCLIB_URL` | lyrics source, only change it for a self-hosted LRCLIB (default `https://lrclib.net/api`) |
 
 ## Docker
 

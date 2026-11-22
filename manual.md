@@ -51,9 +51,15 @@ nano .env          # created from .env.sample by setup.sh
 | `SEARCH_MAX_MINUTES` | no | name searches skip results longer than this (default 15) |
 | `REPLY_MESSAGE` | no | optional text auto-reply to incoming private messages (empty = off) |
 | `SESSION_NAME`, `SESSION_DIR` | no | session file name / folder (default `user`, `sessions`) |
+| `MAX_QUEUE` | no | items that may wait in the queue of one group (default 10) |
+| `PROGRESS_EVERY` | no | seconds between updates of the progress bar on the now-playing card (default 10) |
+| `LYRICS_MAX_MINUTES` | no | songs longer than this play without lyrics (default 15) |
+| `LYRICS_TOLERANCE` | no | allowed difference in seconds between the song and the found lyrics (default 10) |
+| `LYRICS_FONT` | no | font of the lyrics, it must contain the letters you need (default `Vazirmatn`: Latin + Persian / Arabic) |
+| `LRCLIB_URL` | no | where the lyrics are fetched from; only change it for a self-hosted LRCLIB (default `https://lrclib.net/api`) |
 
 Keys from older versions (`BOT_TOKEN`, `SESSION_STRING`, `PREFIX`) are **not used** any more
-(`SUDOERS` is still accepted as a fallback for `SUDO_USERS`).
+(`SUDOERS` is still accepted as a fallback for `SUDO_USERS`, and `OWNERS` for `OWNER_USERS`).
 
 ## 4. Login (once)
 
