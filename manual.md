@@ -129,7 +129,7 @@ and only from the logged-in account itself and the `SUDO_USERS`:
 
 - `/play` posts a **now-playing card** with the title and a picture (track artwork or the video's thumbnail;
   the account's profile picture if there is none), the play state (▶️ Playing, ⏸ Paused, ⏹ Stopped, ✅ Finished)
-  and the list of available commands.
+  and a progress bar; the commands are listed by `/help`.
 - If the card message gets removed (for example a moderation bot of the group deletes it), the bot logs it once
   and keeps playing without updating the card. Plays asked for from the private chat (`/play <number>`) post and
   update their card in that private chat instead of the group; queued items keep that.
@@ -212,16 +212,20 @@ main.py                 start: loads plugins, starts the Telegram client + voice
 login.py                one-time interactive login
 config.py               reads .env
 commandmapper.py        command names and aliases (edit to rename commands)
-translations.py         texts of the start / help / now-playing card (built from commandmapper)
+translations.py         texts of /start, /help, /about and the command hint (built from commandmapper)
 helpers/user.py         the Telegram user-account client
 helpers/voice.py        py-tgcalls engine (call_py)
 helpers/ytdl.py         yt-dlp helpers: stream links, name search, file download, temp file cleanup
 helpers/media.py        ffprobe audio/video detection, thumbnails, profile picture
 helpers/download.py     Telegram download with progress, stall detection and timeouts
-helpers/decorators.py   authorization (logged-in account + SUDO_USERS)
-plugins/stream.py       /play /stream /next /queue /pause /resume /end /restart + queue + stream-end handling + lost-call recovery + now-playing card
+helpers/decorators.py   authorization (logged-in account + SUDO_USERS, owners = OWNER_USERS)
+helpers/lyrics.py       synced lyrics lookup (LRCLIB) and the lyrics video (ffmpeg + libass)
+plugins/stream.py       /play /stream /next /queue /pause /resume /end /restart /jump /loop /vol /lyrics /delete + queue + stream-end handling + lost-call recovery + now-playing card
 plugins/download.py     /download
 plugins/private.py      /start /help /about
+plugins/dmplay.py       owners: /play <number> and /stream <number> from the private chat
+plugins/owner.py        owners: /list /join /leave
+plugins/sudo.py         owners: /admins /promote /demote (SUDO_USERS, saved to .env)
 plugins/nopm.py         optional private-message auto reply
 deploy/videoplayerbot.service   systemd unit
 Dockerfile              optional container image (the login must be created once inside the sessions volume)
@@ -230,7 +234,7 @@ assets/, helpers/admins.py      unused leftovers of the original project; assets
 
 ## Progress bar, jump, volume, delete
 
-- The now-playing card shows `elapsed bar total` and refreshes every PROGRESS_EVERY seconds (default 10, set in .env). Live streams show only the elapsed time. The command list is no longer printed under the card.
+- The now-playing card shows `elapsed bar total` and refreshes every PROGRESS_EVERY seconds (default 10, set in .env). Live streams show only the elapsed time.
 - `/jump <time>` moves in the current media (aliases: seek). The time is a number with an optional unit: s = seconds (default), m = minutes, h = hours. No sign or `+` goes ahead, `-` goes back. Examples: `/jump 30`, `/jump +30s`, `/jump 5m`, `/jump -10`, `/jump -40s`, `/jump 1h`.
 - `/loop` (aliases: repeat) repeats the media that plays now, again and again; send it again (or `/loop off`) to stop. Starting another item (/next, the queue moving on) switches it off. The card shows 🔁 while it is on. Not possible on live streams.
 - `/vol <1-200>` (alias: volume) sets the bot's volume in the voice chat, 100 = normal. It is applied with an ffmpeg audio filter (Telegram ignores the volume of the bot own audio), so changing it restarts the running track at the same position, with a short gap. Without a number it shows the current value. The value is kept per chat and applied to every new track until the app restarts.
