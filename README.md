@@ -9,7 +9,9 @@ See [manual.md](manual.md) for the full guide.
 - Plays **songs by name**: `/play daft punk get lucky` finds it on YouTube and plays the audio.
 - Plays YouTube videos, YouTube live streams, live radio / direct links and Telegram audio / video files.
 - `/play` detects audio or video itself; `/play video <name or link>` forces video.
-- Now-playing card with title, artwork, play state and a progress bar (`01:23 ━━●─── 04:56`).
+- Now-playing card with title, artwork, play state and a progress bar (`01:23 ━━●─── 04:56`). If something removes the card message, playback just goes on without it.
+- Plays started from the **private chat** (`/play <number>`) post and update their card there, not in the group.
+- **Survives lost voice calls**: when Telegram drops the connection the bot rejoins and continues from the same position; why a call was lost is written to the log.
 - `/lyrics` plays a song as a **video with synced lyrics** (from [LRCLIB](https://lrclib.net)), Persian / right-to-left text included.
 - `/jump` forward / back in time, `/loop` repeat, `/vol` volume, `/delete` clean up the bot's messages.
 - `/download` sends the song (mp3) or video (mp4) as a file in the chat.
@@ -42,7 +44,7 @@ reply to audio/video + /play     - Play that file
 /download video <name or link>   - Send the video as an mp4 file
 /restart                         - Restart the app
 /list                            - Owners only, in private chat: numbered list of joined groups
-/play <number> [link]            - Owners only, in private chat: reply to a link / audio / video (or add a link) to play it in the group with that number of /list
+/play <number> [link]            - Owners only, in private chat: reply to a link / audio / video (or add a link) to play it in the group with that number of /list (the card is shown in the private chat)
 /id                              - Everyone, private chat only: replies with the sender's Telegram number
 /admins, /promote, /demote       - Owners only, in groups and private chat: list / add / remove SUDO users (saved to .env)
 /join <invite link or @username> - Owners only: join that group

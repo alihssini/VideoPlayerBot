@@ -118,7 +118,7 @@ and only from the logged-in account itself and the `SUDO_USERS`:
 | `/download video <name or link>` | send the **mp4** video (max 720p) in the chat |
 | `/restart` | restart the app |
 | `/list` | **owners only**, in private chat: numbered list of the joined groups (fixed order until the next `/list`) |
-| `/play <number>` / `/play <number> <link or song name>` | **owners only**, in private chat: send the bot a link, audio or video, reply to it with `/play <number>` (number of `/list`) and it plays in that group's voice chat; it is queued when the group already plays. `/stream <number>` forces video |
+| `/play <number>` / `/play <number> <link or song name>` | **owners only**, in private chat: send the bot a link, audio or video, reply to it with `/play <number>` (number of `/list`) and it plays in that group's voice chat; it is queued when the group already plays. `/stream <number>` forces video. The now-playing card is posted and updated in that private chat, the group gets none |
 | `/join <invite link or @username>` | **owners only**: join that group |
 | `/id` | **everyone**, private chat only: replies with the sender's Telegram number (also `/آیدی`) |
 | `/admins` | **owners only**, in groups and private chat: numbered list of the SUDO users with names (also `/ادمینها`) |
@@ -130,6 +130,10 @@ and only from the logged-in account itself and the `SUDO_USERS`:
 - `/play` posts a **now-playing card** with the title and a picture (track artwork or the video's thumbnail;
   the account's profile picture if there is none), the play state (▶️ Playing, ⏸ Paused, ⏹ Stopped, ✅ Finished)
   and the list of available commands.
+- If the card message gets removed (for example a moderation bot of the group deletes it), the bot logs it once
+  and keeps playing without updating the card. Plays asked for from the private chat (`/play <number>`) post and
+  update their card in that private chat instead of the group; queued items keep that.
+- Songs found by name show `Artist - Title` on the card, without a link.
 - **Queue:** while something plays, `/play` and `/stream` (name, link or replied file) add the new item to the
   queue instead of replacing the current one. When a stream ends, the next queued item starts by itself and gets its
   own card; after the last one the bot leaves the voice chat. `/next` skips the current item, `/queue` lists them,
@@ -175,6 +179,8 @@ systemctl restart videoplayerbot
 | `Not logged in yet` on start | run `.venv/bin/python login.py` |
 | `no active voice chat` | start a voice chat in the group first |
 | `-503 Timeout` on `phone.JoinGroupCall` | temporary Telegram-side error; just send the command again |
+| Playback stops by itself / the bot disappears from the voice chat | the call was lost: Telegram dropped the connection, the voice chat was closed, or the account was removed. PyTgCalls forgets such a call silently, so the bot now watches for it (connection changes, call-left updates and a check every 5 seconds) and writes the reason to the log: `voice connection in <chat>: FAILED / TIMEOUT / CLOSED`, `call update in <chat>: kicked / closed_voice_chat ...` and `lost the voice call in <chat> (<reason>) at mm:ss`. After a lost connection it rejoins and goes on from the same position (at most 2 times per 5 minutes, `REJOIN_LIMIT` / `REJOIN_WINDOW` in `plugins/stream.py`); when that does not work it continues with the queue. When the voice chat was closed or the account was kicked it clears the queue and leaves. Look at it with `journalctl -u videoplayerbot \| grep -E 'lost the voice call\|rejoined\|voice connection\|call update'` |
+| `the card message was removed from the chat` in the log | something (usually a moderation bot) deleted the card. Playback is not affected, the card just stops updating |
 | Service dies with `SEGV` when joining | that was the old `tgcalls` library – this version uses ntgcalls and does not have it |
 | `FILE_REFERENCE_EXPIRED` when replying to an old file | the app re-fetches the replied message for a fresh reference; update to this version |
 | YouTube download / search error | update yt-dlp (section 8); make sure `deno` exists: `.venv/bin/deno --version` |
@@ -213,7 +219,7 @@ helpers/ytdl.py         yt-dlp helpers: stream links, name search, file download
 helpers/media.py        ffprobe audio/video detection, thumbnails, profile picture
 helpers/download.py     Telegram download with progress, stall detection and timeouts
 helpers/decorators.py   authorization (logged-in account + SUDO_USERS)
-plugins/stream.py       /play /stream /next /queue /pause /resume /end /restart + queue + stream-end handling + now-playing card
+plugins/stream.py       /play /stream /next /queue /pause /resume /end /restart + queue + stream-end handling + lost-call recovery + now-playing card
 plugins/download.py     /download
 plugins/private.py      /start /help /about
 plugins/nopm.py         optional private-message auto reply
