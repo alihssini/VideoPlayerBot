@@ -26,7 +26,7 @@ from pyrogram import filters, enums
 from pyrogram.types import LinkPreviewOptions, Message
 from pytgcalls import filters as call_filters
 from pytgcalls.exceptions import NoActiveGroupCall, NotInCallError
-from pytgcalls.types import AudioQuality, GroupCallConfig, MediaStream, StreamEnded, VideoQuality
+from pytgcalls.types import AudioQuality, ChatUpdate, GroupCallConfig, MediaStream, StreamEnded, VideoQuality
 from helpers.user import User, SENT
 from helpers.voice import call_py
 from config import COMMAND_PREFIXES, DOWNLOAD_MAX_MB, VIDEO_QUALITY
@@ -55,6 +55,11 @@ LOOPS = {}    # chat_id -> True while the current media repeats (reset when anot
 VOLUMES = {}  # chat_id -> volume (1-200) chosen with the volume command, applied again for every new stream
 PLAYING = {}  # chat_id -> running stream: {"source", "kind", "duration", "base" (second it started at), "since" (monotonic, None while paused)}
 TICKERS = {}  # chat_id -> asyncio.Task that keeps the progress line of the card up to date
+WATCHERS = {}  # chat_id -> asyncio.Task that notices when the voice call died without the bot ending it
+DROPS = {}  # chat_id -> monotonic times of the automatic rejoins of the last few minutes
+BACKGROUND = set()  # running recovery tasks (kept referenced so they are not collected half way)
+REJOIN_LIMIT, REJOIN_WINDOW = 2, 300  # a call that dies more often than this (per seconds) is given up on
+WATCH_EVERY = 5  # seconds between two checks that the voice call still exists
 PROGRESS_EVERY = int(os.getenv("PROGRESS_EVERY") or 10)  # seconds between progress updates of the card
 BAR_WIDTH = 14
 UNITS = {"s": 1, "m": 60, "h": 3600}
@@ -94,6 +99,8 @@ async def update_card(card, state: str):
     if not card:
         return
     card["state"] = state
+    if card.get("gone"):
+        return  # its message was removed from the chat: the stream goes on without a card
     text = card_text(card, state)
     try:
         if card["photo"]:
@@ -101,8 +108,13 @@ async def update_card(card, state: str):
         else:
             await card["msg"].edit_text(text, link_preview_options=NO_PREVIEW)
     except Exception as e:
-        if "MESSAGE_NOT_MODIFIED" not in str(e):
-            print(f"[WARN] - could not update the card: {type(e).__name__}: {e}")
+        if "MESSAGE_NOT_MODIFIED" in str(e):
+            return
+        if "MESSAGE_ID_INVALID" in str(e) or type(e).__name__ == "MessageIdInvalid":
+            card["gone"] = True  # e.g. a moderation bot of the group removed it
+            print("[INFO] - the card message was removed from the chat, the stream goes on without updating it")
+            return
+        print(f"[WARN] - could not update the card: {type(e).__name__}: {e}")
 
 
 def build_stream(source, kind: str, start: int = 0, volume: int = 100) -> MediaStream:
@@ -174,6 +186,8 @@ async def _tick(chat_id, card: dict):
             await asyncio.sleep(PROGRESS_EVERY)
             if CARDS.get(chat_id) is not card or not ACTIVE.get(chat_id):
                 return
+            if card.get("gone"):
+                return  # nothing left to update
             if card.get("state") != "▶️ Playing":
                 continue
             card["pos"] = position(chat_id)
@@ -196,6 +210,7 @@ def start_ticker(chat_id, card: dict):
 def forget(chat_id):
     """The stream of this chat is over: stop tracking its position."""
     stop_ticker(chat_id)
+    stop_watchdog(chat_id)
     PLAYING.pop(chat_id, None)
     LOOPS.pop(chat_id, None)
 
@@ -287,6 +302,7 @@ async def start_stream(chat_id: int, item: dict, m: Message = None, msg: Message
     LOOPS.pop(chat_id, None)
     PLAYING[chat_id] = {"source": source, "kind": kind, "duration": await duration(source), "base": 0.0, "since": time.monotonic()}
     print(f"[INFO] - {kind} stream started in {chat_id}")
+    start_watchdog(chat_id)
     if msg:
         await msg.delete()
 
@@ -294,7 +310,8 @@ async def start_stream(chat_id: int, item: dict, m: Message = None, msg: Message
     await update_card(CARDS.pop(chat_id, None), old_state)  # the previous card is outdated now
     card = {"kind": kind, "title": item.get("title"), "link": item.get("link"), "chat": item.get("chat") or "this chat",
             "state": "▶️ Playing", "pos": 0, "dur": PLAYING[chat_id]["duration"]}
-    sent, has_photo = await announce(chat_id, card_text(card, "▶️ Playing"), [thumb, await profile_photo(User)], m)
+    card_chat = item.get("dm_chat") or chat_id  # played on request of the private chat: the card lives there
+    sent, has_photo = await announce(card_chat, card_text(card, "▶️ Playing"), [thumb, await profile_photo(User)], m if m and m.chat.id == card_chat else None)
     card.update(msg=sent, photo=has_photo)
     CARDS[chat_id] = card
     start_ticker(chat_id, card)
@@ -346,6 +363,142 @@ async def advance(chat_id, old_state: str):
     QUEUES.pop(chat_id, None)
     await finish(chat_id, old_state)
     return None
+
+
+async def call_alive(chat_id) -> bool:
+    """Does the voice engine still hold a call for this chat? True when it cannot tell,
+    so a failed check never ends a stream."""
+    try:
+        return chat_id in await call_py.calls
+    except Exception:
+        return True
+
+
+def _spawn(coro):
+    """Run a recovery in the background; whatever goes wrong in it is logged, never lost."""
+    async def guarded():
+        try:
+            await coro
+        except Exception:
+            traceback.print_exc()
+    task = asyncio.create_task(guarded())
+    BACKGROUND.add(task)
+    task.add_done_callback(BACKGROUND.discard)
+
+
+async def handle_drop(chat_id, reason: str, resume: bool = True, verify: bool = False, noticed: float = None):
+    """The voice call of this chat died without the bot ending it (kicked, voice chat closed, connection lost).
+    PyTgCalls only forgets such a call silently, so the bot would go on believing it plays. This puts the bot's
+    state back in line and, when the call can be rejoined, continues the same media where it stopped.
+    noticed = time.monotonic() of the event: an event older than the last (re)start is stale and ignored."""
+    noticed = time.monotonic() if noticed is None else noticed
+    async with _lock(chat_id):
+        if not ACTIVE.get(chat_id) or STARTED.get(chat_id, 0) > noticed:
+            return  # stopped meanwhile (/end, end of the queue) or a newer stream already runs
+        if verify and await call_alive(chat_id):
+            return  # false alarm
+        play = PLAYING.get(chat_id)
+        at = int(position(chat_id))
+        print(f"[WARN] - lost the voice call in {chat_id} ({reason}) at {fmt_time(at)}")
+        fatal = not resume
+        now = time.monotonic()
+        recent = [t for t in DROPS.get(chat_id, []) if now - t < REJOIN_WINDOW]
+        if resume and play and len(recent) < REJOIN_LIMIT:
+            DROPS[chat_id] = recent + [now]
+            card = CARDS.get(chat_id)
+            paused = bool(card) and card.get("state") == "⏸ Paused"
+            try:
+                try:
+                    await call_py.leave_call(chat_id)  # drop the dead connection, else play() would only swap the source of it
+                except Exception:
+                    pass
+                await with_timeout(
+                    call_py.play(chat_id, build_stream(play["source"], play["kind"], at, VOLUMES.get(chat_id, 100)), config=GroupCallConfig(auto_start=False)),
+                    60,
+                    "rejoining the voice chat",
+                )
+                STARTED[chat_id] = time.monotonic()
+                play["base"], play["since"] = float(at), time.monotonic()
+                if paused:
+                    await call_py.pause(chat_id)
+                    mark_paused(chat_id)
+                print(f"[INFO] - rejoined the voice chat of {chat_id}, went on from {fmt_time(at)}")
+                return
+            except NoActiveGroupCall:
+                fatal = True  # the voice chat itself is gone
+                print(f"[WARN] - no voice chat is running in {chat_id} any more")
+            except Exception as e:
+                print(f"[WARN] - could not rejoin the voice chat of {chat_id}: {type(e).__name__}: {e}")
+        elif resume:
+            print(f"[WARN] - the call of {chat_id} keeps dying, not rejoining again")
+        if fatal:
+            clear_queue(chat_id)
+            await finish(chat_id, "⚠️ Disconnected")
+        else:
+            await advance(chat_id, "⚠️ Disconnected")
+
+
+async def _watch(chat_id):
+    misses = 0
+    try:
+        while True:
+            await asyncio.sleep(WATCH_EVERY)
+            if not ACTIVE.get(chat_id):
+                return
+            if await call_alive(chat_id):
+                misses = 0
+                continue
+            misses += 1
+            if misses >= 2:  # a single miss can be a stream switching over
+                misses = -3  # then leave the recovery some time before looking again
+                _spawn(handle_drop(chat_id, "the voice engine no longer has the call", verify=True, noticed=time.monotonic()))
+    except asyncio.CancelledError:
+        pass
+
+
+def stop_watchdog(chat_id):
+    task = WATCHERS.pop(chat_id, None)
+    if task:
+        task.cancel()
+
+
+def start_watchdog(chat_id):
+    stop_watchdog(chat_id)
+    WATCHERS[chat_id] = asyncio.create_task(_watch(chat_id))
+
+
+@call_py.on_update(call_filters.chat_update(ChatUpdate.Status.LEFT_CALL))
+async def call_left(_, update: ChatUpdate):
+    """Kicked, the group left, the voice chat closed: the call is over and cannot be rejoined."""
+    chat_id = update.chat_id
+    names = [n for n in ("KICKED", "LEFT_GROUP", "CLOSED_VOICE_CHAT", "DISCARDED_CALL", "BUSY_CALL") if update.status & getattr(ChatUpdate.Status, n)]
+    why = "|".join(names).lower() or "call ended"
+    print(f"[INFO] - call update in {chat_id}: {why}")
+    if ACTIVE.get(chat_id):
+        _spawn(handle_drop(chat_id, why, resume=False, noticed=time.monotonic()))
+
+
+def _watch_connection():
+    """PyTgCalls drops a call whose connection failed without telling the bot: look at those changes too."""
+    original = getattr(call_py, "_handle_connection_changed", None)
+    if original is None:
+        print("[WARN] - this PyTgCalls has no connection hook, only the call check notices lost calls")
+        return
+
+    async def hooked(chat_id, net_state):
+        try:
+            name = getattr(getattr(net_state, "state", None), "name", None) or str(net_state)
+            print(f"[INFO] - voice connection in {chat_id}: {name}")
+            if name not in ("CONNECTING", "CONNECTED") and ACTIVE.get(chat_id):
+                _spawn(handle_drop(chat_id, f"connection {name.lower()}", noticed=time.monotonic()))
+        except Exception:
+            traceback.print_exc()
+        return await original(chat_id, net_state)
+
+    call_py._handle_connection_changed = hooked
+
+
+_watch_connection()
 
 
 def media_kind(media: Message):
@@ -405,6 +558,7 @@ async def resolve_item(client, m: Message, msg: Message, force=None, args=None, 
         except Exception as e:
             print(f"[WARN] - could not refresh the replied message: {type(e).__name__}: {e}")
     kind, title, link, thumb = force, None, None, None
+    searched = False
     if private_target and not query and media and not media_kind(media):
         # a replied text message with a link in it
         found_link = re.search(r"https?://\S+", media.text or media.caption or "")
@@ -420,6 +574,7 @@ async def resolve_item(client, m: Message, msg: Message, force=None, args=None, 
                 await msg.edit_text(f"❌ **Nothing found for** `{_clean(query)}` **!**")
                 return None
             query = found["url"]
+            searched = True
         link = query
         if YT_REGEX.match(query):
             kind = kind or "video"
@@ -430,6 +585,12 @@ async def resolve_item(client, m: Message, msg: Message, force=None, args=None, 
                 await msg.edit_text(f"❌ **YouTube Download Error !** \n\n`{e}`")
                 return None
             source, title = info["source"], info.get("title")
+            if searched:
+                # found by a song name: the card shows only "Artist - Title", no link
+                artist = info.get("artist")
+                if artist and title and artist.lower() not in title.lower():
+                    title = f"{artist} - {title}"
+                link = None
             thumb = await to_jpg(info["thumb"]) if info.get("thumb") else None
         else:
             source = query
@@ -482,6 +643,8 @@ async def handle_play(client, m: Message, force=None, lyrics=False, target=None,
         item = await resolve_item(client, m, msg, force, args=args, chat_title=target["title"] if target else None)
         if item is None:
             return
+        if target:
+            item["dm_chat"] = m.chat.id  # asked for from the private chat: its card is posted and updated there
         note = None
         if lyrics:
             item = await add_lyrics(item, msg)
@@ -502,10 +665,8 @@ async def handle_play(client, m: Message, force=None, lyrics=False, target=None,
                     f"➕ **Added to the queue** (#{len(queue)})" + (f" of {_clean(target['title'])}" if target else "") + f"\n`{_name(queue[-1])}`\n\n"
                     f"Next: {tag('next')} · list: {tag('queue')}" + (f"\n\n{note}" if note else "")
                 )
-            await start_stream(chat_id, item, None if target else m, msg)  # no m: the card goes to the group, not to the private chat
+            await start_stream(chat_id, item, m, msg)  # the card is posted in the chat of m (the private chat for dmplay)
             item = None
-        if target:
-            await m.reply_text(f"▶️ Started in {target['title']}", parse_mode=PLAIN_TEXT)
         if note:
             await m.reply_text(note)
 
@@ -828,7 +989,7 @@ async def delete_messages(client, m: Message):
             print(f"[WARN] - could not delete messages in {chat_id}: {type(e).__name__}: {e}")
     SENT[chat_id] = [i for i in SENT.get(chat_id, []) if i not in ids]
     card = CARDS.get(chat_id)
-    if card and card["msg"].id in ids:  # the now-playing card is gone: stop updating it
+    if card and card.get("msg") and getattr(card["msg"].chat, "id", None) == chat_id and card["msg"].id in ids:  # the now-playing card is gone: stop updating it
         CARDS.pop(chat_id, None)
         stop_ticker(chat_id)
     try:

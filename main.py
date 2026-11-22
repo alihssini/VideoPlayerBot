@@ -19,12 +19,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>
 import os
 import sys
 import asyncio
+import logging
 import importlib
 from pyrogram import idle
 from helpers.user import User, SESSION_FILE
 from helpers.voice import call_py
 from helpers.media import profile_photo
 from helpers.ytdl import wipe_downloads, sweeper
+
+# the voice engine reports its retries and lost connections through logging: show them in the journal
+logging.basicConfig(level=logging.WARNING, format="[%(levelname)s] - %(name)s: %(message)s")
+logging.getLogger("pytgcalls").setLevel(logging.INFO)
 
 if not os.path.isfile(SESSION_FILE):
     sys.exit("[ERROR] - Not logged in yet. Run `.venv/bin/python login.py` once to log in with your Telegram account.")
