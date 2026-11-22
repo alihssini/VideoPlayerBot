@@ -119,10 +119,18 @@ async def sweeper() -> None:
         sweep_downloads()
 
 
+def _artist(info: dict):
+    """The artist of a YouTube result (music metadata, else the channel name without its \" - Topic\" suffix)."""
+    name = info.get("artist") or info.get("creator") or info.get("uploader") or info.get("channel")
+    if name and name.endswith(" - Topic"):
+        name = name[: -len(" - Topic")]
+    return name
+
+
 def _audio(query: str) -> dict:
     with YoutubeDL({**_BASE, "format": "bestaudio[protocol^=http]/bestaudio/best"}) as ydl:
         info = ydl.extract_info(query, download=False)
-    return {"source": info["url"], "title": info.get("title"), "thumb": info.get("thumbnail")}
+    return {"source": info["url"], "title": info.get("track") or info.get("title"), "artist": _artist(info), "thumb": info.get("thumbnail")}
 
 
 def _video(query: str) -> dict:
@@ -130,12 +138,12 @@ def _video(query: str) -> dict:
     # (max 720p) and live streams are played straight from their HLS URL.
     with YoutubeDL({**_BASE, "format": "bv*+ba/b"}) as ydl:
         info = ydl.extract_info(query, download=False)
-    title, thumb = info.get("title"), info.get("thumbnail")
+    title, thumb, artist = info.get("track") or info.get("title"), info.get("thumbnail"), _artist(info)
 
     if info.get("is_live"):
         with YoutubeDL({**_BASE, "format": "best/b"}) as ydl:
             live = ydl.extract_info(query, download=False)
-        return {"source": live["url"], "title": title, "thumb": thumb}
+        return {"source": live["url"], "title": title, "artist": artist, "thumb": thumb}
 
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     opts = {
@@ -150,7 +158,7 @@ def _video(query: str) -> dict:
         if not done.get("requested_downloads"):
             raise RuntimeError(f"Video is larger than {DOWNLOAD_MAX_MB} MB")
         path = done["requested_downloads"][0]["filepath"]
-    return {"source": path, "title": title, "thumb": thumb}
+    return {"source": path, "title": title, "artist": artist, "thumb": thumb}
 
 
 SEARCH_MAX_SECONDS = int(os.getenv("SEARCH_MAX_MINUTES") or 15) * 60  # skip long loops / mixes
