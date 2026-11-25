@@ -1,36 +1,29 @@
-"""
-VideoPlayerBot, Telegram Video Chat Bot
-Copyright (c) 2021  Asm Safone <https://github.com/AsmSafone>
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>
-"""
+"""Optional text auto-reply to private messages of people without a role (REPLY_MESSAGE in .env)."""
 
 from pyrogram import filters
-from helpers.user import User
-from config import REPLY_MESSAGE, OLD_PMS
+from pyrogram.handlers import MessageHandler
 
 
-@User.on_message(filters.private & filters.incoming & ~filters.bot & ~filters.service & ~filters.me & ~filters.chat([777000, 454000]))
-async def nopm(client, message):
-    # text-only auto reply to private messages, only active when REPLY_MESSAGE is set in .env
-    if REPLY_MESSAGE is None:
+def register(app) -> None:
+    text = app.settings.reply_message
+    if not text:
         return
-    try:
-        reply = await message.reply_text(REPLY_MESSAGE, quote=False)
-        old = OLD_PMS.get(message.chat.id)
-        if old:
-            await client.delete_messages(message.chat.id, old)
-        OLD_PMS[message.chat.id] = reply.id
-    except Exception as e:
-        print(f"[WARN] - PM auto reply failed: {e}")
+    last: dict[int, int] = {}
+    prefixes = tuple(app.settings.prefixes)
+
+    async def nopm(client, m):
+        if app.acl.has_any_role(m.from_user.id if m.from_user else None):
+            return                      # people with a role talk to the bot, they get no auto-reply
+        if (m.text or "").startswith(prefixes):
+            return                      # commands (/id is open to everyone)
+        try:
+            reply = await m.reply_text(text, quote=False)
+            old = last.get(m.chat.id)
+            if old:
+                await client.delete_messages(m.chat.id, old)
+            last[m.chat.id] = reply.id
+        except Exception:
+            pass
+
+    app.client.add_handler(MessageHandler(
+        nopm, filters.private & filters.incoming & ~filters.bot & ~filters.service & ~filters.me & ~filters.chat([777000, 454000])), group=1)

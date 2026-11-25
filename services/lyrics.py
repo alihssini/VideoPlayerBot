@@ -10,18 +10,20 @@ import re
 import json
 import time
 import asyncio
-import hashlib
+
 import urllib.error
 import urllib.parse
 import urllib.request
 
-LRCLIB_URL = (os.getenv("LRCLIB_URL") or "https://lrclib.net/api").rstrip("/")
+from app.config import settings
+
+LRCLIB_URL = settings.lrclib_url
 USER_AGENT = "VideoPlayerBot (https://github.com/AsmSafone/VideoPlayerBot)"
-LYRICS_MAX_SECONDS = int(os.getenv("LYRICS_MAX_MINUTES") or 15) * 60  # longer media is played without lyrics
-TOLERANCE = int(os.getenv("LYRICS_TOLERANCE") or 10)  # lyrics whose song length differs by more seconds are not used
+LYRICS_MAX_SECONDS = settings.lyrics_max_seconds  # longer media is played without lyrics
+TOLERANCE = settings.lyrics_tolerance  # lyrics whose song length differs by more seconds are not used
 RENDER_TIMEOUT = 600
 WIDTH, HEIGHT, FPS = 640, 360, 10
-FONT = os.getenv("LYRICS_FONT") or "Vazirmatn"  # installed with the fonts-vazirmatn package (setup.sh), has Latin + Arabic script
+FONT = settings.lyrics_font  # installed with the fonts-vazirmatn package (setup.sh), has Latin + Arabic script
 FONT_DIR = os.path.abspath(os.path.join("assets", "fonts"))  # optional: any .ttf / .otf put here is found too
 
 _NOISE = re.compile(r"\(.*?\)|\[.*?\]|\{.*?\}|【.*?】", re.S)
@@ -266,6 +268,43 @@ async def render_video(lines: list, duration: float, source, cover, heading: str
     return out_path
 
 
-def output_path(source, title: str) -> str:
-    name = "lyr_" + hashlib.md5(f"{source}|{title}|{time.time()}".encode()).hexdigest()[:12] + ".mp4"
-    return os.path.abspath(os.path.join("downloads", name))
+class LyricsUnavailable(Exception):
+    """Why the song plays without lyrics (shown to the user)."""
+
+
+class LyricsMaker:
+    """Synced lyrics video for an audio item: downloads/<chat>/<key>_lyrics.mp4 (re-used for the same song)."""
+
+    def __init__(self, files, to_jpg):
+        self.files, self.to_jpg = files, to_jpg
+
+    async def make(self, chat_id: int, source: str, title: str | None, length: float | None, cover: str | None,
+                   key: str, status) -> str:
+        """Path of the lyrics video, acquired for the caller. Raises LyricsUnavailable."""
+        if not title:
+            raise LyricsUnavailable("there is no song title to search the lyrics for")
+        if not length:
+            raise LyricsUnavailable("the length of the media is unknown (live stream?)")
+        if length > LYRICS_MAX_SECONDS:
+            raise LyricsUnavailable(f"it is longer than {LYRICS_MAX_SECONDS // 60} minutes")
+        dest = self.files.path(chat_id, f"{key}_lyrics", "mp4")
+        async with self.files.lock(dest):
+            if os.path.isfile(dest) and os.path.getsize(dest) > 0:
+                return self.files.acquire(dest)
+            await status.update("🎤 `Looking for lyrics ...`")
+            found = await find_lyrics(title, length)
+            if not found:
+                hint = " (Persian names often only match in English letters, try `Artist - Song`)" if has_arabic_script(title) else ""
+                raise LyricsUnavailable("no synced lyrics were found for it" + hint)
+            heading = f"{found['artist']} - {found['title']}" if found["artist"] else found["title"]
+            await status.update(f"🎞 `Rendering the lyrics video ...`\n`{heading.replace('`', ' ')}`")
+            own_cover = None
+            if not cover:
+                own_cover = await self.to_jpg(source, self.files.path(chat_id, f"{key}_cover", "jpg"))
+            try:
+                await render_video(found["lines"], length, source, cover or own_cover, heading, dest)
+            except Exception as e:
+                raise LyricsUnavailable(f"the lyrics video could not be made ({type(e).__name__})")
+            finally:
+                self.files.drop_unused(own_cover)
+            return self.files.acquire(dest)

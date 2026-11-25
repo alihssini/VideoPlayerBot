@@ -9,3 +9,7 @@ python-dotenv==1.2.4
 yt-dlp[default]==2026.8.19
 # JavaScript runtime that yt-dlp needs for YouTube
 deno==2.9.7
+# now-playing card picture (Persian / Arabic text needs the raqm layout: libraqm / libfribidi from apt)
+pillow
+# tests: .venv/bin/python -m pytest -q tests
+pytest

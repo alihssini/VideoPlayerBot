@@ -17,48 +17,81 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>
 """
 
 import os
+import re
 import sys
+import time
+import shutil
+import signal
 import asyncio
 import logging
-import importlib
-from pyrogram import idle
-from helpers.user import User, SESSION_FILE
-from helpers.voice import call_py
-from helpers.media import profile_photo
-from helpers.ytdl import wipe_downloads, sweeper
 
-# the voice engine reports its retries and lost connections through logging: show them in the journal
-logging.basicConfig(level=logging.WARNING, format="[%(levelname)s] - %(name)s: %(message)s")
-logging.getLogger("pytgcalls").setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO, format="[%(levelname)s] - %(name)s: %(message)s")
+for noisy in ("pyrogram", "httpx"):
+    logging.getLogger(noisy).setLevel(logging.WARNING)
+log = logging.getLogger("vpb")
+
+from app.client import SESSION_FILE  # noqa: E402
+from app.config import settings      # noqa: E402
 
 if not os.path.isfile(SESSION_FILE):
     sys.exit("[ERROR] - Not logged in yet. Run `.venv/bin/python login.py` once to log in with your Telegram account.")
 
-# registers all command handlers on the user client
-for _plugin in ("nopm", "private", "stream", "download", "owner", "sudo", "dmplay"):
-    importlib.import_module(f"plugins.{_plugin}")
 
-if not os.path.isdir("./downloads"):
-    os.makedirs("./downloads")
-wipe_downloads()  # nothing is playing at startup, so leftovers are stale
+def drop_legacy_sudo_from_env() -> None:
+    """SUDO_USERS now live in data/acl/global_sudo.json: remove them from .env (backup in ~/backups first)."""
+    env = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.isfile(env):
+        return
+    with open(env, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    kept = [line for line in lines if not re.match(r"\s*(SUDO_USERS|SUDOERS)\s*=", line)]
+    if kept == lines:
+        return
+    backups = os.path.expanduser("~/backups")
+    os.makedirs(backups, exist_ok=True)
+    backup = os.path.join(backups, f".env.{time.strftime('%Y%m%d-%H%M%S')}.bak")
+    shutil.copy2(env, backup)
+    os.chmod(backup, 0o600)
+    with open(env, "w", encoding="utf-8") as f:
+        f.write("\n".join(kept) + "\n")
+    os.chmod(env, 0o600)
 
 
-async def main():
+async def main() -> None:
+    from app.container import build
+    app = build()
     try:
-        await call_py.start()  # also starts the Telegram client
+        await app.voice.start()           # also starts the Telegram client
     except EOFError:
         sys.exit("[ERROR] - Session is no longer valid and needs a new login. Run `.venv/bin/python login.py`.")
 
-    me = await User.get_me()
-    print(f"\n[INFO] - STARTED VIDEO PLAYER as {me.first_name} (id {me.id}) !")
+    me = await app.client.get_me()
+    app.me_id = me.id
+    app.acl.add_root(me.id)
+    app.cards.bot_name = me.first_name or ""
+    migrated = app.acl.migrate_legacy_sudo(settings.legacy_sudo)
+    if migrated:
+        log.info("moved %d SUDO_USERS from .env to data/acl/global_sudo.json", migrated)
+    if app.acl.global_sudo.file.exists:
+        drop_legacy_sudo_from_env()
+    app.files.wipe()                      # nothing plays at startup, leftovers are stale
+    log.info("STARTED VIDEO PLAYER as %s (id %s)", me.first_name, me.id)
 
-    photo = await profile_photo(User)
-    print(f"[INFO] - fallback picture for the now-playing card: {photo or "none (text-only)"}")
+    background = [asyncio.create_task(c) for c in (app.cards.ticker(app.store), app.recovery.watchdog(), app.files.sweeper())]
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, stop.set)
+    await stop.wait()
 
-    asyncio.create_task(sweeper())  # periodic cleanup of stale files in ./downloads
-    await idle()
-    await User.stop()
-    print("\n[INFO] - STOPPED VIDEO PLAYER !")
+    log.info("stopping: leaving the voice chats ...")
+    await app.player.shutdown()          # leave every voice chat, close the cards
+    for task in background:
+        task.cancel()
+    await app.client.stop()
+    log.info("STOPPED VIDEO PLAYER")
 
 
-asyncio.get_event_loop().run_until_complete(main())
+if __name__ == "__main__":
+    # pyrogram binds its event loop at import time: run main() on that loop
+    asyncio.get_event_loop().run_until_complete(main())

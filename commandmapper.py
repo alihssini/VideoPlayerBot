@@ -1,6 +1,7 @@
 """Command mapper: every command of the bot and the name(s) it answers to.
 
 Edit the lists below to rename commands or add aliases, then restart the app.
+In private chat every playback command can name the group first: /pause 3, /vol #3 80 (numbers from /list).
  - The bot listens ONLY to the names listed here (with the prefixes from config.COMMAND_PREFIXES).
  - The FIRST name of each list is the one shown to people (now-playing card, /help, usage hints).
  - Names must be lowercase, without spaces and without the prefix, and unique across all commands.
@@ -9,7 +10,9 @@ Example: "play": ["p", "play", "spiel"] -> /p, /play and /spiel all start playba
 """
 
 import re
-from config import COMMAND_PREFIXES
+from app.config import settings
+
+COMMAND_PREFIXES = list(settings.prefixes)
 
 COMMANDS = {
     "play":      ["play", "پخش"],       # play a link / replied audio or video (audio or video is detected)
@@ -26,12 +29,23 @@ COMMANDS = {
     "vol":       ["vol", "volume", "صدا"],   # voice chat volume of the bot: /vol 80 (1-200, 100 = normal)
     "delete":    ["delete", "del", "حذف"],   # delete the bot's messages (all of them, or only the replied one)
     "restart":   ["restart", "ریستارت"],    # restart the app
-    "list":      ["list", "لیست"],       # owners only, in private chat: numbered list of the joined groups
-    "join":      ["join", "ورود"],       # owners only: join a group by invite link or @username
-    "leave":     ["leave", "خروج"],      # owners only: leave the group with that list number, or the current group when sent inside one
-    "sudolist":  ["admins", "ادمینها"],   # owners only: numbered list of the SUDO users (names fetched from Telegram)
-    "addsudo":   ["promote", "ارتقا", "ترفیع"],   # owners only: add a SUDO user by reply, id or @username
-    "delsudo":   ["demote", "عزل"],    # owners only: remove a SUDO user by reply, list number, id or @username
+    "list":      ["list", "لیست"],       # numbered list of your groups (bot owners: all joined groups)
+    "use":       ["use", "انتخاب"],      # private chat: choose the group your commands go to: /use 3
+    "join":      ["join", "ورود"],       # bot owners: join a group by invite link or @username
+    "leave":     ["leave", "خروج"],      # bot owners: leave the group with that list number, or the current group
+    "sudolist":  ["admins", "ادمینها"],   # SUDO users of this group (+ global ones)
+    "addsudo":   ["promote", "ارتقا", "ترفیع"],   # group owners: add a SUDO user of this group (reply, id or @username)
+    "delsudo":   ["demote", "عزل"],    # group owners: remove a SUDO user of this group
+    "owners":    ["owners", "مالکها"],  # group owners of this group
+    "addowner":  ["addowner", "افزودن_مالک"],   # bot owners: add a group owner
+    "delowner":  ["delowner", "حذف_مالک"],      # bot owners: remove a group owner
+    "gsudolist": ["gadmins", "ادمینهای_کل"],    # bot owners: global SUDO users (every group)
+    "gaddsudo":  ["gpromote", "ارتقا_کل"],      # bot owners: add a global SUDO user
+    "gdelsudo":  ["gdemote", "عزل_کل"],         # bot owners: remove a global SUDO user
+    "botowners": ["botowners", "مدیران_ربات"],  # bot owners
+    "addbotowner": ["addbotowner", "افزودن_مدیر"],  # root owners: add a bot owner
+    "delbotowner": ["delbotowner", "حذف_مدیر"],     # root owners: remove a bot owner
+    "perms":     ["perms", "whoami", "دسترسی"],     # your role here / in your groups
     "id":        ["id", "آیدی"],          # anyone, private chat only: replies with the sender's Telegram number
     "start":     ["start", "استارت"],      # short intro text
     "help":      ["help", "راهنما"],       # list of commands
