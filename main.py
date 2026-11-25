@@ -25,6 +25,8 @@ import signal
 import asyncio
 import logging
 
+os.umask(0o077)   # sessions, role files, downloads: readable by this user only
+
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] - %(name)s: %(message)s")
 for noisy in ("pyrogram", "httpx"):
     logging.getLogger(noisy).setLevel(logging.WARNING)
