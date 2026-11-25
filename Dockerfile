@@ -6,7 +6,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fontconf
 
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# tgcrypto has no wheel for Python 3.12: compile it, then drop the compiler again
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && pip install --no-cache-dir -r requirements.txt \
+    && apt-get purge -y build-essential && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 COPY . .
 
 # the Telegram login lives here: keep it in a volume and run `python login.py` once
