@@ -52,6 +52,7 @@ class Settings:
     reply_message: str | None
     download_max_mb: int
     video_quality: str
+    youtube_video_mode: str     # "stream" (video + audio URLs, no download) or "download"
     max_queue: int
     progress_every: int
     auto_leave_minutes: int     # leave when nobody else is in the voice chat this long (0 = never)
@@ -77,6 +78,9 @@ def load() -> Settings:
     quality = _text("VIDEO_QUALITY", "SD_360p")
     if quality not in QUALITY_HEIGHT:
         raise SystemExit(f"[ERROR] - VIDEO_QUALITY={quality!r} is not valid, use one of: {', '.join(QUALITY_HEIGHT)}")
+    video_mode = _text("YOUTUBE_VIDEO_MODE", "stream").lower()
+    if video_mode not in ("stream", "download"):
+        raise SystemExit(f"[ERROR] - YOUTUBE_VIDEO_MODE={video_mode!r} is not valid, use stream or download")
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return Settings(
         api_id=int(_required("API_ID")),
@@ -91,6 +95,7 @@ def load() -> Settings:
         reply_message=_text("REPLY_MESSAGE") or None,
         download_max_mb=_int("DOWNLOAD_MAX_MB", 1000),
         video_quality=quality,
+        youtube_video_mode=video_mode,
         max_queue=_int("MAX_QUEUE", 10),
         progress_every=max(5, _int("PROGRESS_EVERY", 10)),
         auto_leave_minutes=max(0, _int("AUTO_LEAVE_MINUTES", 10)),

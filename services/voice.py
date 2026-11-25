@@ -21,7 +21,7 @@ class VoiceService:
     async def start(self) -> None:
         await self.calls.start()           # also starts the Telegram client
 
-    def _stream(self, source: str, kind: str, start: int, volume: int) -> MediaStream:
+    def _stream(self, source: str, kind: str, start: int, volume: int, audio: str | None = None) -> MediaStream:
         """start > 0 begins that many seconds in; volume (1-200) is applied by ffmpeg, because Telegram's
         participant volume has no effect on what the account itself sends."""
         params = []
@@ -31,14 +31,17 @@ class VoiceService:
             params.append(f"--audio ---mid -af volume={volume / 100:.2f}")
         extra = {"ffmpeg_parameters": " ".join(params)} if params else {}
         if kind == VIDEO:
+            if audio:     # YouTube: video-only and audio-only URLs streamed together
+                extra["audio_path"] = audio
             return MediaStream(source, audio_parameters=AudioQuality.HIGH, video_parameters=self.quality, **extra)
         return MediaStream(source, audio_parameters=AudioQuality.HIGH, video_flags=MediaStream.Flags.IGNORE, **extra)
 
-    async def play(self, chat_id: int, source: str, kind: str, start: int = 0, volume: int = 100, timeout: int = 90) -> None:
+    async def play(self, chat_id: int, source: str, kind: str, start: int = 0, volume: int = 100, timeout: int = 90,
+                   audio: str | None = None) -> None:
         """Join the voice chat (or switch what is sent into it)."""
         try:
             await asyncio.wait_for(
-                self.calls.play(chat_id, self._stream(source, kind, start, volume), config=GroupCallConfig(auto_start=False)),
+                self.calls.play(chat_id, self._stream(source, kind, start, volume, audio), config=GroupCallConfig(auto_start=False)),
                 timeout,
             )
         except NoActiveGroupCall:

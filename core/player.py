@@ -76,7 +76,14 @@ class Player:
     async def start_locked(self, state: ChatState, item: MediaItem, replaced: str | None = REPLACED,
                            by: Requester | None = None) -> None:
         await self.prepare(item)
-        await self.voice.play(state.chat_id, item.source, item.kind, 0, state.volume)
+        try:
+            await self.voice.play(state.chat_id, item.source, item.kind, 0, state.volume, audio=item.audio_source)
+        except Exception as e:
+            if not self._can_fall_back(item, e):
+                raise
+            log.warning("direct stream failed in %s (%s: %s), downloading instead", state.chat_id, type(e).__name__, e)
+            await self._fall_back(item)
+            await self.voice.play(state.chat_id, item.source, item.kind, 0, state.volume)
         old, state.playback = state.playback, Playback(item)
         state.loop, state.started_at = False, time.monotonic()
         if old:
@@ -90,12 +97,25 @@ class Player:
         """Same media again from `position`, keeping pause state."""
         pb = state.playback
         paused = pb.paused
+        if source is None:
+            await self.prepare(pb.item)      # stream URLs expire after some hours: fresh ones when needed
         await self.voice.play(state.chat_id, source or pb.item.source, kind or pb.item.kind, int(position),
-                              volume if volume is not None else state.volume, timeout=60)
+                              volume if volume is not None else state.volume, timeout=60,
+                              audio=None if source else pb.item.audio_source)
         if paused:
             await self.voice.pause(state.chat_id)
         state.started_at = time.monotonic()      # the old stream's end event must not skip to the next item
         pb.moved_to(int(position), paused)
+
+    @staticmethod
+    def _can_fall_back(item: MediaItem, error: Exception) -> bool:
+        from core.errors import NoVoiceChat
+        return bool(item.fallback) and not item.fell_back and not isinstance(error, NoVoiceChat)
+
+    async def _fall_back(self, item: MediaItem) -> None:
+        item.fell_back = True
+        async with item.prep_lock:
+            await item.fallback(item)
 
     async def advance_locked(self, state: ChatState, label: str, by: Requester | None = None) -> MediaItem | None:
         """Next queued item (items that fail are skipped); None = queue empty, the call was left."""
@@ -255,6 +275,7 @@ class Player:
             self.discard(pb.item)
             pb.item.files.append(new_source)
             pb.item.source, pb.item.kind, pb.item.lyrics, pb.item.prepare = new_source, kind, True, None
+            pb.item.audio_source, pb.item.fallback = None, None
             await self.events.changed(state, PAUSED if pb.paused else PLAYING)
 
     # ---- queue management -------------------------------------------------------------------------------
@@ -314,7 +335,20 @@ class Player:
         if not state or not state.active or state.playback.item.kind not in kinds:
             return
         pb = state.playback
-        if time.monotonic() - state.started_at < 3 and (pb.item.duration or 99) > 5:
+        early = time.monotonic() - state.started_at
+        if early < 10 and pb.position() < 8 and (pb.item.duration or 99) > 15 and self._can_fall_back(pb.item, RuntimeError()):
+            async with state.lock:          # a direct stream that ends right away was refused (e.g. HTTP 403)
+                if state.playback is pb:
+                    log.warning("direct stream of %s ended after %.0fs, downloading instead", chat_id, early)
+                    try:
+                        await self._fall_back(pb.item)
+                        await self.restart_locked(state, 0)
+                        return
+                    except Exception:
+                        log.exception("fallback download failed in %s", chat_id)
+                        await self.advance_locked(state, FINISHED)
+                        return
+        if early < 3 and (pb.item.duration or 99) > 5:
             return  # late end event of the stream that was just replaced (a really short media still ends)
         log.info("%s stream ended in %s", pb.item.kind, chat_id)
         async with state.lock:

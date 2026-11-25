@@ -28,6 +28,7 @@ class MediaItem:
     kind: str                                  # AUDIO | VIDEO
     key: str = ""                              # stable id of the media (file names, card cache)
     source: str | None = None                  # local file or URL for the voice engine; None until prepared
+    audio_source: str | None = None            # separate audio URL (YouTube video streamed as video + audio)
     title: str | None = None
     artist: str | None = None
     link: str | None = None                    # shown as a link on the card
@@ -40,6 +41,8 @@ class MediaItem:
     files: list[str] = field(default_factory=list)   # files held by this item (reference counted)
     prepare: Callable[["MediaItem"], Awaitable[None]] | None = None  # lazy resolve (download / fresh URL)
     prepared_at: float = 0.0
+    fallback: Callable[["MediaItem"], Awaitable[None]] | None = None   # e.g. download when the direct stream fails
+    fell_back: bool = False
     prep_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
 
     @property

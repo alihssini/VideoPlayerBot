@@ -36,8 +36,9 @@ def is_playlist(url: str) -> bool:
 
 
 class MediaResolver:
-    def __init__(self, client, youtube: YouTube, files: FileStore, max_bytes: int):
+    def __init__(self, client, youtube: YouTube, files: FileStore, max_bytes: int, video_mode: str = "stream"):
         self.client, self.yt, self.files, self.max_bytes = client, youtube, files, max_bytes
+        self.stream_video = video_mode == "stream"
 
     async def resolve(self, m, chat_id: int, query: str, kind: str | None, status, requester: Requester | None,
                       eager: bool) -> MediaItem:
@@ -99,19 +100,32 @@ class MediaResolver:
             if item.thumb:
                 item.files.append(item.thumb)
         if eager and kind == VIDEO:
-            await status.update("📥 `Downloading the video ...`")
+            await status.update("🔄 `Preparing the video stream ...`" if self.stream_video else "📥 `Downloading the video ...`")
             await item.prepare(item)
         return item
 
     def _youtube_preparer(self, chat_id: int, url: str):
-        async def prepare(item: MediaItem) -> None:
+        async def download(item: MediaItem) -> None:
+            item.source = item.audio_source = None
+            await prepare(item, force_download=True)
+
+        async def prepare(item: MediaItem, force_download: bool = False) -> None:
+            fresh = item.source and time.monotonic() - item.prepared_at < URL_MAX_AGE
             if item.kind == AUDIO:
-                if item.source and time.monotonic() - item.prepared_at < URL_MAX_AGE:
+                if fresh:
                     return
                 info = await self.yt.audio(url)
                 item.source, item.prepared_at = info.url, time.monotonic()
                 return
-            if item.source and (item.live or self.files.owns(item.source)):
+            if item.source and (self.files.owns(item.source) or (fresh and not force_download)):
+                return
+            if self.stream_video and not force_download and not item.fell_back:
+                info = await self.yt.video_streams(url)
+                item.source, item.audio_source, item.prepared_at = info.url, info.audio_url, time.monotonic()
+                if info.live:
+                    item.duration = None
+                else:
+                    item.fallback = download
                 return
             dest = self.files.path(chat_id, item.key, "mp4")
             async with self.files.lock(dest):

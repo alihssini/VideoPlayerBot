@@ -25,6 +25,7 @@ cd /root/VideoPlayerBot
 | `OWNER_USERS` | – | **root owners**: bot owners no command can remove (space separated ids). The logged-in account is always one. |
 | `SUDO_USERS` | – | only read once: moved to `data/acl/global_sudo.json` on the first start, then removed from `.env` (backup in `~/backups`) |
 | `VIDEO_QUALITY` | `SD_360p` | `SD_360p`, `SD_480p`, `HD_720p`, `FHD_1080p` — also the max height downloaded from YouTube. A wrong value stops the start with a message. |
+| `YOUTUBE_VIDEO_MODE` | `stream` | `stream`: YouTube videos play straight from YouTube (video + audio URLs, nothing downloaded, fresh URLs on resume / jump / repeat; if YouTube refuses the stream it is downloaded automatically) · `download`: the whole video is downloaded first (steadier, uses disk) |
 | `MAX_QUEUE` | 10 | items waiting per group |
 | `PROGRESS_EVERY` | 10 | seconds between card updates (min 5) |
 | `AUTO_LEAVE_MINUTES` | 10 | leave the voice chat when nobody else listened this long (0 = never) |
@@ -107,7 +108,7 @@ Start a voice chat (or give the account the right to start it), then:
 | `/delete` | delete all messages of the bot here (or only the replied one) |
 | `/download <name or link>` (`video` first for mp4) | the file in the chat |
 
-While something plays, new media joins the queue. YouTube videos in the queue are downloaded only when they are next (the next one is prepared in the background), audio links are refreshed right before they play.
+While something plays, new media joins the queue. YouTube songs (audio) and — with `YOUTUBE_VIDEO_MODE=stream` — YouTube videos play straight from YouTube without a download; their links are refreshed before they play and on resume / jump / repeat. Downloaded videos (download mode or fallback) are fetched only when they are next in the queue.
 
 ### In the private chat with the account
 Every playback command works here as well and goes to a group:

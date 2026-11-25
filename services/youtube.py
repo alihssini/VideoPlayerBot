@@ -33,7 +33,8 @@ class Info:
     thumb: str | None
     duration: float | None
     live: bool
-    url: str | None = None      # direct stream URL (audio / live)
+    url: str | None = None      # direct stream URL (audio / live / video-only)
+    audio_url: str | None = None  # audio-only URL that belongs to a video-only `url`
     path: str | None = None     # downloaded file
     width: int | None = None
     height: int | None = None
@@ -111,6 +112,27 @@ class YouTube:
 
     async def audio(self, url: str) -> Info:
         return await self._run(self._audio, url)
+
+    # ---- video as direct streams: video-only + audio-only URL (nothing downloaded) ----
+    def _video_streams(self, url: str) -> Info:
+        h = self.height
+        fmt = (f"bv*[height<={h}][vcodec^=avc1][protocol^=http]+ba[protocol^=http]/"
+               f"bv*[height<={h}][protocol^=http]+ba[protocol^=http]/b[height<={h}][protocol^=http]/b")
+        with YoutubeDL({**_BASE, "format": fmt}) as ydl:
+            raw = ydl.extract_info(url, download=False)
+        if raw.get("is_live"):
+            with YoutubeDL({**_BASE, "format": "best/b"}) as live_ydl:
+                live = live_ydl.extract_info(url, download=False)
+            return _info(raw, url=live["url"])
+        parts = raw.get("requested_formats") or []
+        video = next((f for f in parts if f.get("vcodec") not in (None, "none")), None)
+        audio = next((f for f in parts if f.get("vcodec") in (None, "none")), None)
+        if video and audio:
+            return _info(raw, url=video["url"], audio_url=audio["url"])
+        return _info(raw, url=raw["url"])      # one muxed stream
+
+    async def video_streams(self, url: str) -> Info:
+        return await self._run(self._video_streams, url)
 
     # ---- video: live = HLS URL, VOD = download + merge (one extract_info, then process the same result) ----
     def _video(self, url: str, dest_noext: str) -> Info:

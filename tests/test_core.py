@@ -19,10 +19,12 @@ from ui.card import CaptionData, build_caption
 
 class FakeVoice:
     def __init__(self):
-        self.calls, self.playing = [], set()
+        self.calls, self.playing, self.refuse = [], set(), set()
 
-    async def play(self, chat_id, source, kind, start=0, volume=100, timeout=90):
-        self.calls.append(("play", chat_id, source, kind, int(start), volume))
+    async def play(self, chat_id, source, kind, start=0, volume=100, timeout=90, audio=None):
+        if source in self.refuse:
+            raise RuntimeError("403 Forbidden")
+        self.calls.append(("play", chat_id, source, kind, int(start), volume, audio))
         self.playing.add(chat_id)
 
     async def pause(self, chat_id):
@@ -255,3 +257,46 @@ def test_caption_volume_only_while_playing():
     assert "🔊 100" in build_caption(CaptionData(label=PLAYING, **base))
     assert "🔊 100" in build_caption(CaptionData(label=PAUSED, **base))
     assert "🔊" not in build_caption(CaptionData(label="✅ Finished", **base))
+
+
+def _streamed_video(name, duration=200):
+    """A YouTube video in stream mode: URLs first, download (fallback) when the stream is refused."""
+    async def fallback(it):
+        it.source, it.audio_source = f"/dl/{name}.mp4", None
+    return MediaItem(kind=VIDEO, source=f"https://v/{name}", audio_source=f"https://a/{name}", title=name,
+                     duration=duration, fallback=fallback)
+
+
+def test_video_streams_with_separate_audio(tmp_path):
+    async def scenario():
+        player, voice, *_ = make_player(tmp_path)
+        await player.enqueue(-1, "G", _streamed_video("v"))
+        assert voice.calls[-1] == ("play", -1, "https://v/v", VIDEO, 0, 100, "https://a/v")
+        await player.seek(-1, to=50)                               # restarts keep the separate audio
+        assert voice.calls[-1] == ("play", -1, "https://v/v", VIDEO, 50, 100, "https://a/v")
+    run(scenario())
+
+
+def test_refused_stream_falls_back_to_download(tmp_path):
+    async def scenario():
+        player, voice, *_ = make_player(tmp_path)
+        voice.refuse.add("https://v/x")
+        await player.enqueue(-1, "G", _streamed_video("x"))          # play() raises -> download
+        assert voice.calls[-1][2:4] == ("/dl/x.mp4", VIDEO) and voice.calls[-1][6] is None
+        assert player.store.get(-1).playback.item.fell_back
+    run(scenario())
+
+
+def test_stream_that_ends_at_once_falls_back(tmp_path):
+    async def scenario():
+        player, voice, *_ = make_player(tmp_path)
+        await player.enqueue(-1, "G", _streamed_video("y"))
+        await player.on_stream_end(-1, {"video"})                  # ended right away: refused by YouTube
+        state = player.store.get(-1)
+        assert state.active and state.playback.item.source == "/dl/y.mp4"
+        assert voice.calls[-1][2] == "/dl/y.mp4"
+        state.started_at -= 30
+        state.playback.base = 190
+        await player.on_stream_end(-1, {"video"})                  # a real end afterwards: finished
+        assert not state.active
+    run(scenario())

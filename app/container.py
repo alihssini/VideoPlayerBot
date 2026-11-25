@@ -98,7 +98,7 @@ def build() -> App:
     app = App(
         settings=settings, client=client, sent=sent, bot=bot, bot_sent=bot_sent, files=files, store=store, voice=voice, acl=acl, cards=cards,
         player=player, recovery=Recovery(player, voice, store), youtube=youtube,
-        resolver=MediaResolver(client, youtube, files, settings.max_bytes), lyrics=LyricsMaker(files, probe.to_jpg),
+        resolver=MediaResolver(client, youtube, files, settings.max_bytes, settings.youtube_video_mode), lyrics=LyricsMaker(files, probe.to_jpg),
         groups=GroupDirectory(client, acl), limiter=UserLimiter(settings.user_parallel),
         session=SessionFile(f"{settings.data_dir}/session.json"),
     )
