@@ -3,7 +3,7 @@
 import re
 import logging
 from pyrogram import filters
-from pyrogram.handlers import CallbackQueryHandler
+from pyrogram.handlers import CallbackQueryHandler, MessageHandler
 from core.acl import Role
 from core.errors import UserError
 from core.models import Requester
@@ -50,6 +50,25 @@ def register(app) -> None:
                 text = "⏹ Stopped"
             elif action == "l":
                 text = "🔁 Repeat on" if await player.set_loop(chat_id, None, by) else "➡️ Repeat off"
+            elif action.startswith("j") and action[1:].lstrip("+-").isdigit():
+                to, length = await player.seek(chat_id, delta=int(action[1:]))
+                text = f"{'⏪' if int(action[1:]) < 0 else '⏩'} {fmt_time(to)} / {fmt_time(length)}"
+            elif action == "dl":
+                if not state or not state.playback:
+                    raise UserError("Nothing is streaming!")
+                item, target = state.playback.item, cq.message.chat.id
+
+                async def deliver():
+                    try:
+                        async with app.limiter.slot(uid, exempt=role >= Role.BOT_OWNER):
+                            await app.delivery.send(app.bot, target, chat_id, item)
+                    except UserError as e:
+                        await app.bot.send_message(target, f"❌ {_plain(e)}")
+                    except Exception as e:
+                        log.exception("download button failed")
+                        await app.bot.send_message(target, f"❌ Download failed: {type(e).__name__}")
+                player.spawn(deliver())
+                text = "⬇️ Preparing the file, it comes as a new message ..."
             elif action in ("vd", "vu"):
                 current = state.volume if state else 100
                 level = max(1, min(200, current + (20 if action == "vu" else -20)))
@@ -75,3 +94,11 @@ def register(app) -> None:
             await cq.answer(f"Error: {type(e).__name__}", show_alert=True)
 
     app.bot.add_handler(CallbackQueryHandler(pressed, filters.regex(rf"^{PREFIX}:")))
+
+    async def started(_, m):
+        """/start in the private chat with the bot: from now on cards come here with buttons."""
+        app.cards.bot_allowed(m.chat.id)
+        await m.reply_text("✅ The now-playing cards for media you start in the private chat with the player account "
+                           "now come with buttons. Commands still go to the player account.")
+
+    app.bot.add_handler(MessageHandler(started, filters.private & filters.command("start")))

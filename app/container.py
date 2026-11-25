@@ -15,6 +15,7 @@ from core.recovery import Recovery
 from core.state import StateStore
 from services import probe
 from services.card_renderer import CardRenderer
+from services.delivery import Delivery
 from services.groups import GroupDirectory
 from services.lyrics import LyricsMaker
 from services.resolver import MediaResolver
@@ -46,6 +47,7 @@ class App:
     groups: GroupDirectory
     limiter: UserLimiter
     session: SessionFile
+    delivery: Delivery | None = None
     idle: IdleWatcher | None = None
     me_id: int = 0
     started: float = field(default_factory=time.monotonic)
@@ -100,6 +102,7 @@ def build() -> App:
         groups=GroupDirectory(client, acl), limiter=UserLimiter(settings.user_parallel),
         session=SessionFile(f"{settings.data_dir}/session.json"),
     )
+    app.delivery = Delivery(youtube, files)
     app.idle = IdleWatcher(player, voice, store, settings.auto_leave_minutes, lambda: app.me_id)
     holder["app"] = app
     for plugin in (roles, groups, info, playback, download, nopm, buttons):

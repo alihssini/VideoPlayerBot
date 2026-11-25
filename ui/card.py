@@ -140,6 +140,10 @@ class CardPresenter:
         card.posts.append(await self._send(chat_id, build_caption(self._data(state, card, where)), photo, where, state))
         return True
 
+    def bot_allowed(self, chat_id: int) -> None:
+        """The user started the bot / the bot was added: post with buttons there again right away."""
+        self._bot_failed.pop(chat_id, None)
+
     def forget(self, chat_id: int, message_ids) -> None:
         """/delete removed some of our messages: stop editing those."""
         ids = set(message_ids)
@@ -181,7 +185,8 @@ class CardPresenter:
                     return await self.bot.send_photo(chat_id, photo=photo, caption=text, reply_markup=markup), True, where, True
                 return await self.bot.send_message(chat_id, text, reply_markup=markup, link_preview_options=NO_PREVIEW), False, where, True
             except Exception as e:     # bot not in the group / user never started the bot / no right to post
-                self._bot_failed[chat_id] = time.monotonic()
+                if chat_id < 0:        # groups: wait 10 min before trying again; private chats: try every time
+                    self._bot_failed[chat_id] = time.monotonic()
                 log.info("the bot cannot post in %s (%s), the account posts the card without buttons", chat_id, type(e).__name__)
         if photo:
             try:

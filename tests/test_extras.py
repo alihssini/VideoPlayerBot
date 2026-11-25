@@ -84,9 +84,12 @@ def test_card_buttons():
     state.playback.pause()
     state.loop, state.volume = True, 140
     rows = keyboard(state).inline_keyboard
-    assert rows[0][0].text == "▶️" and rows[0][3].text == "🔁 on" and rows[1][1].text == "🔊 140"
+    assert rows[0][0].text == "▶️" and rows[0][3].text == "🔁 on" and rows[2][1].text == "🔊 140"
+    assert [b.callback_data for b in rows[1]] == ["vpb:j-60:-100123", "vpb:j-30:-100123", "vpb:j+30:-100123", "vpb:j+60:-100123"]
+    assert rows[2][-1].callback_data == "vpb:dl:-100123"
     state.playback = Playback(item("live", duration=None))
-    assert not any(b.callback_data.startswith("vpb:l:") for b in keyboard(state).inline_keyboard[0])   # no loop for live
+    data = [b.callback_data for row in keyboard(state).inline_keyboard for b in row]
+    assert not any(d.startswith(("vpb:l:", "vpb:j", "vpb:dl:")) for d in data)   # live: no loop, seek, download
 
 
 def test_example_acl_files_load(tmp_path):

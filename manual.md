@@ -131,10 +131,13 @@ State changes name who did it ("⏸ Paused by **Sara**", "⏭ Skipped by …"). 
 
 ### Buttons under the card (optional)
 With `BOT_TOKEN` in `.env` (a real bot from @BotFather) the card is posted by that bot with buttons:
-`⏸/▶️` pause / resume · `⏭` next · `⏹` stop · `🔁` repeat · `🔉 −20` / `🔊 +20` volume · `🔊 <n>` shows the volume · `📋` queue.
+`⏸/▶️` pause / resume · `⏭` next · `⏹` stop · `🔁` repeat
+`⏪ 60` `⏪ 30` `⏩ 30` `⏩ 60` jump back / ahead (seconds)
+`🔉 −20` / `🔊 +20` volume · `🔊 <n>` shows the volume · `📋` queue · `⬇️` the playing media as a file (sent as a new message by the bot; YouTube is downloaded again, Telegram files / lyrics videos are sent directly).
+Live streams have no repeat / jump / download buttons.
 A press needs the same role as the command (SUDO or higher in that group); others get "not allowed". The buttons follow the state (▶️ while paused) and disappear when the media ends.
 - **Groups:** add the bot to the group (it only needs to send messages). Where it is not a member, the account posts the card without buttons (checked again every 10 minutes).
-- **Private chat:** a bot can only write to people who started it: send `/start` to the bot once, else the card comes from the account without buttons.
+- **Private chat:** a bot can only write to people who started it: send `/start` to the bot once (it confirms), else the card comes from the account without buttons. The bot tries again for every new card, so it works right after `/start`.
 - The bot logs in by itself on start (`sessions/bot.session`); a wrong token only disables the buttons (see the log).
 
 ### Renaming commands – `commandmapper.py`
