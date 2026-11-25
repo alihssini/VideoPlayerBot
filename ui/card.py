@@ -1,5 +1,5 @@
-"""Now-playing card: picture (rendered by services/card_renderer) + caption, posted in the group and, for media
-requested from a private chat, also there. One ticker task keeps the progress bar of all cards up to date."""
+"""Now-playing card: picture (rendered by services/card_renderer) + caption, posted in the group, or only in the
+private chat when the media was requested from there. One ticker task keeps the progress bar of all cards up to date."""
 
 import asyncio
 import logging
@@ -88,9 +88,8 @@ class CardPresenter:
         card = Card(item)
         self.cards[state.chat_id] = card
         photo = await self._picture(state, item)
-        targets = [(state.chat_id, None)]
-        if item.reply_chat and item.reply_chat != state.chat_id:
-            targets.append((item.reply_chat, state.title))
+        # started from a private chat: the card goes ONLY there (with the group name); else into the group
+        targets = [(item.reply_chat, state.title)] if item.reply_chat and item.reply_chat != state.chat_id else [(state.chat_id, None)]
         for chat, where in targets:
             text = build_caption(self._data(state, card, where))
             card.posts.append(await self._send(chat, text, photo, where))
@@ -108,7 +107,7 @@ class CardPresenter:
 
     async def failed(self, state: ChatState, item: MediaItem, error: Exception) -> None:
         text = f"⚠️ **Could not play** `{clean(item.name)}` **, skipped!**\n\n`{clean(error)[:200]}`"
-        for chat in {state.chat_id, item.reply_chat} - {None}:
+        for chat in [item.reply_chat or state.chat_id]:
             try:
                 await self.client.send_message(chat, text, link_preview_options=NO_PREVIEW)
             except Exception:

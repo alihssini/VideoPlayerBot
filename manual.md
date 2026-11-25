@@ -116,7 +116,7 @@ Every playback command works here as well and goes to a group:
 2. `/use 3` — your commands here go to group 3 from now on (remembered, also after restarts; 🎯 in `/list`), `/use` shows it, `/use off` removes it
 3. `/pause`, `/queue`, `/play <song>`, … — for that group. Another group for one command: `#<number>` first: `/pause #2`, `/vol #2 80`, `/jump #2 1:30`. Where a number cannot be mistaken for a value a bare number works too: `/pause 2`, `/play 2 <song>`.
 
-Media started from the private chat gets a card in the private chat **and** in the group. If you have a role in only one group, it is chosen automatically.
+Media started from the private chat gets its card **only in the private chat** (with the group name); media started in the group gets it in the group. If you have a role in only one group, it is chosen automatically.
 
 ### The now-playing card
 A rendered picture (blurred artwork, cover, title, artist, kind badge, length, group) with a caption:
