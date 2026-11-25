@@ -28,10 +28,7 @@ class SentMessages:
         self.ids[chat_id] = [i for i in self.ids.get(chat_id, []) if i not in removed]
 
 
-def make_client() -> tuple[Client, SentMessages]:
-    client = Client(settings.session_name, api_id=settings.api_id, api_hash=settings.api_hash,
-                    phone_number=settings.phone, workdir=settings.session_dir)
-    sent = SentMessages()
+def _track(client: Client, sent: SentMessages) -> None:
     for name in ("send_message", "send_photo", "send_audio", "send_video", "send_document", "send_voice", "send_animation"):
         original = getattr(client, name)
 
@@ -39,4 +36,22 @@ def make_client() -> tuple[Client, SentMessages]:
             return sent.remember(await _original(*args, **kwargs))
 
         setattr(client, name, wrapper)   # reply_text / reply_photo / ... of a Message end up in these
+
+
+def make_bot() -> tuple[Client | None, SentMessages]:
+    """The optional real bot (BOT_TOKEN): only posts cards with buttons and answers button presses."""
+    sent = SentMessages()
+    if not settings.bot_token:
+        return None, sent
+    bot = Client("bot", api_id=settings.api_id, api_hash=settings.api_hash, bot_token=settings.bot_token,
+                 workdir=settings.session_dir, no_updates=False)
+    _track(bot, sent)
+    return bot, sent
+
+
+def make_client() -> tuple[Client, SentMessages]:
+    client = Client(settings.session_name, api_id=settings.api_id, api_hash=settings.api_hash,
+                    phone_number=settings.phone, workdir=settings.session_dir)
+    sent = SentMessages()
+    _track(client, sent)
     return client, sent

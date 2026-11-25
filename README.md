@@ -7,6 +7,7 @@ Plays YouTube videos, songs by name, live streams, radios and Telegram audio / v
 - `/play <song name | link>` or reply to a file — audio or video is detected; a queue when something plays already
 - YouTube playlists (first videos up to the queue limit), live streams, direct links, radios
 - Rendered now-playing card (artwork, title, artist, kind, length; Persian / Arabic text right-to-left) with progress bar, who requested it and what comes next
+- Optional buttons under the card (pause, next, stop, loop, volume, queue) via a real bot (`BOT_TOKEN`)
 - Pause / resume / next / jump (`+30s`, `-2m`, `1:30`) / loop / volume / queue editing (remove, move, shuffle, clear)
 - `/lyrics` — the song as a video with synced lyrics (LRCLIB), Persian works
 - `/download` — the song (mp3) or video (mp4) as a file

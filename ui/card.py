@@ -8,7 +8,9 @@ from pyrogram.errors import FloodWait
 from core.models import ChatState, MediaItem, Requester, VIDEO
 from core.player import PLAYING, FINISHED, fmt_time
 from services.card_renderer import CardInfo, CardRenderer
+from ui.buttons import keyboard
 from ui.replies import NO_PREVIEW, clean, is_gone
+import time
 
 log = logging.getLogger("vpb.card")
 BAR_WIDTH = 14
@@ -69,7 +71,7 @@ class Card:
     item: MediaItem
     label: str = PLAYING
     by: str | None = None
-    posts: list = field(default_factory=list)       # [(message, has_photo, where)]
+    posts: list = field(default_factory=list)       # [(message, has_photo, where, by_bot)]
 
 
 class CardPresenter:
@@ -79,6 +81,8 @@ class CardPresenter:
         self.client, self.files, self.renderer, self.profile, self.every = client, files, renderer, profile, progress_every
         self.cards: dict[int, Card] = {}
         self.bot_name = ""
+        self.bot = None                                  # real bot client (BOT_TOKEN): posts cards with buttons
+        self._bot_failed: dict[int, float] = {}          # chat -> time the bot could not post there (retry after 10 min)
 
     # ---- PlayerEvents ----
     async def started(self, state: ChatState, item: MediaItem, replaced: str | None, by: Requester | None = None) -> None:
@@ -92,7 +96,7 @@ class CardPresenter:
         targets = [(item.reply_chat, state.title)] if item.reply_chat and item.reply_chat != state.chat_id else [(state.chat_id, None)]
         for chat, where in targets:
             text = build_caption(self._data(state, card, where))
-            card.posts.append(await self._send(chat, text, photo, where))
+            card.posts.append(await self._send(chat, text, photo, where, state))
 
     async def changed(self, state: ChatState, label: str, by: Requester | None = None) -> None:
         card = self.cards.get(state.chat_id)
@@ -133,7 +137,7 @@ class CardPresenter:
             return False
         card.posts = [p for p in card.posts if p[0].chat.id != chat_id]
         photo = await self._picture(state, card.item)
-        card.posts.append(await self._send(chat_id, build_caption(self._data(state, card, where)), photo, where))
+        card.posts.append(await self._send(chat_id, build_caption(self._data(state, card, where)), photo, where, state))
         return True
 
     def forget(self, chat_id: int, message_ids) -> None:
@@ -169,25 +173,36 @@ class CardPresenter:
             return rendered
         return cover
 
-    async def _send(self, chat_id: int, text: str, photo: str | None, where):
+    async def _send(self, chat_id: int, text: str, photo: str | None, where, state: ChatState):
+        if self.bot and time.monotonic() - self._bot_failed.get(chat_id, -1e9) > 600:
+            markup = keyboard(state)
+            try:
+                if photo:
+                    return await self.bot.send_photo(chat_id, photo=photo, caption=text, reply_markup=markup), True, where, True
+                return await self.bot.send_message(chat_id, text, reply_markup=markup, link_preview_options=NO_PREVIEW), False, where, True
+            except Exception as e:     # bot not in the group / user never started the bot / no right to post
+                self._bot_failed[chat_id] = time.monotonic()
+                log.info("the bot cannot post in %s (%s), the account posts the card without buttons", chat_id, type(e).__name__)
         if photo:
             try:
-                return await self.client.send_photo(chat_id, photo=photo, caption=text), True, where
+                return await self.client.send_photo(chat_id, photo=photo, caption=text), True, where, False
             except Exception as e:
                 log.warning("card picture rejected: %s: %s", type(e).__name__, e)
-        return await self.client.send_message(chat_id, text, link_preview_options=NO_PREVIEW), False, where
+        return await self.client.send_message(chat_id, text, link_preview_options=NO_PREVIEW), False, where, False
 
     async def _edit(self, state: ChatState, card: Card, label: str | None = None) -> None:
         if state.playback and state.playback.item is card.item:
             card.__dict__["last_pos"] = state.playback.position()
         alive = []
-        for msg, has_photo, where in card.posts:
+        playing = state.playback is not None and state.playback.item is card.item and label is None
+        for msg, has_photo, where, by_bot in card.posts:
             text = build_caption(self._data(state, card, where, label))
+            markup = {"reply_markup": keyboard(state)} if by_bot and playing else {}   # closed card: buttons removed
             try:
                 if has_photo:
-                    await msg.edit_caption(text)
+                    await msg.edit_caption(text, **markup)
                 else:
-                    await msg.edit_text(text, link_preview_options=NO_PREVIEW)
+                    await msg.edit_text(text, link_preview_options=NO_PREVIEW, **markup)
             except FloodWait:
                 raise
             except Exception as e:
@@ -196,7 +211,7 @@ class CardPresenter:
                     continue
                 if "MESSAGE_NOT_MODIFIED" not in str(e):
                     log.warning("could not update the card: %s: %s", type(e).__name__, e)
-            alive.append((msg, has_photo, where))
+            alive.append((msg, has_photo, where, by_bot))
         card.posts = alive
 
     async def _close(self, state: ChatState, card: Card, label: str, by: Requester | None) -> None:

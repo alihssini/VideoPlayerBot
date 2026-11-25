@@ -43,6 +43,7 @@ class Settings:
     api_id: int
     api_hash: str
     phone: str | None
+    bot_token: str | None       # optional real bot: posts the card with buttons
     session_name: str
     session_dir: str
     root_owners: tuple          # OWNER_USERS: bot owners that commands can never remove
@@ -81,6 +82,7 @@ def load() -> Settings:
         api_id=int(_required("API_ID")),
         api_hash=_required("API_HASH"),
         phone=_text("PHONE_NUMBER") or None,
+        bot_token=_text("BOT_TOKEN") or None,
         session_name=_text("SESSION_NAME", "user"),
         session_dir=_text("SESSION_DIR", "sessions"),
         root_owners=_ids("OWNER_USERS", "OWNERS"),

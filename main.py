@@ -65,6 +65,16 @@ async def main() -> None:
     except EOFError:
         sys.exit("[ERROR] - Session is no longer valid and needs a new login. Run `.venv/bin/python login.py`.")
 
+    if app.bot:
+        try:
+            await app.bot.start()
+            bot_me = await app.bot.get_me()
+            app.cards.bot = app.bot
+            log.info("card buttons by the bot @%s (add it to the groups; private-chat cards need /start in the bot)", bot_me.username)
+        except Exception as e:
+            log.warning("BOT_TOKEN did not work (%s: %s), cards have no buttons", type(e).__name__, e)
+            app.bot = None
+
     me = await app.client.get_me()
     app.me_id = me.id
     app.acl.add_root(me.id)
@@ -92,6 +102,11 @@ async def main() -> None:
     await app.stop_all()                 # remember what plays, leave every voice chat, close the cards
     for task in background:
         task.cancel()
+    if app.bot:
+        try:
+            await app.bot.stop()
+        except Exception:
+            pass
     await app.client.stop()
     log.info("STOPPED VIDEO PLAYER")
 

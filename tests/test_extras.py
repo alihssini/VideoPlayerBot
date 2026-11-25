@@ -69,3 +69,20 @@ def test_playlist_links():
     assert is_playlist("https://www.youtube.com/playlist?list=PL123")
     assert not is_playlist("https://www.youtube.com/watch?v=abcdefghijk&list=PL123")   # one video of a playlist
     assert not is_playlist("https://youtu.be/abcdefghijk?list=PL1")
+
+
+def test_card_buttons():
+    from core.models import ChatState, Playback
+    from ui.buttons import keyboard
+    state = ChatState(-100123)
+    assert keyboard(state) is None                              # nothing plays: no buttons
+    state.playback = Playback(item("a"))
+    rows = keyboard(state).inline_keyboard
+    assert rows[0][0].text == "⏸" and rows[0][0].callback_data == "vpb:pp:-100123"
+    assert all(len(b.callback_data.encode()) <= 64 for row in rows for b in row)   # Telegram limit
+    state.playback.pause()
+    state.loop, state.volume = True, 140
+    rows = keyboard(state).inline_keyboard
+    assert rows[0][0].text == "▶️" and rows[0][3].text == "🔁 on" and rows[1][1].text == "🔊 140"
+    state.playback = Playback(item("live", duration=None))
+    assert not any(b.callback_data.startswith("vpb:l:") for b in keyboard(state).inline_keyboard[0])   # no loop for live

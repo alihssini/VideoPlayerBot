@@ -4,7 +4,7 @@ import time
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from app.client import SentMessages, make_client
+from app.client import SentMessages, make_bot, make_client
 from app.config import Settings, settings
 from core.acl import AclService
 from core.files import FileStore
@@ -31,6 +31,8 @@ class App:
     settings: Settings
     client: object
     sent: SentMessages
+    bot: object
+    bot_sent: SentMessages
     files: FileStore
     store: StateStore
     voice: VoiceService
@@ -78,9 +80,10 @@ class App:
 
 
 def build() -> App:
-    from plugins import download, groups, info, nopm, playback, roles
+    from plugins import buttons, download, groups, info, nopm, playback, roles
 
     client, sent = make_client()
+    bot, bot_sent = make_bot()
     files = FileStore(settings.download_dir)
     store = StateStore()
     voice = VoiceService(client, settings.video_quality)
@@ -91,7 +94,7 @@ def build() -> App:
     voice.on_stream_end(player.on_stream_end)
     youtube = YouTube(settings.max_bytes, settings.search_max_seconds, settings.video_height)
     app = App(
-        settings=settings, client=client, sent=sent, files=files, store=store, voice=voice, acl=acl, cards=cards,
+        settings=settings, client=client, sent=sent, bot=bot, bot_sent=bot_sent, files=files, store=store, voice=voice, acl=acl, cards=cards,
         player=player, recovery=Recovery(player, voice, store), youtube=youtube,
         resolver=MediaResolver(client, youtube, files, settings.max_bytes), lyrics=LyricsMaker(files, probe.to_jpg),
         groups=GroupDirectory(client, acl), limiter=UserLimiter(settings.user_parallel),
@@ -99,6 +102,6 @@ def build() -> App:
     )
     app.idle = IdleWatcher(player, voice, store, settings.auto_leave_minutes, lambda: app.me_id)
     holder["app"] = app
-    for plugin in (roles, groups, info, playback, download, nopm):
+    for plugin in (roles, groups, info, playback, download, nopm, buttons):
         plugin.register(app)
     return app

@@ -129,6 +129,14 @@ A rendered picture (blurred artwork, cover, title, artist, kind badge, length, g
 ```
 State changes name who did it ("⏸ Paused by **Sara**", "⏭ Skipped by …"). If a moderation bot deletes the card, playback goes on without it.
 
+### Buttons under the card (optional)
+With `BOT_TOKEN` in `.env` (a real bot from @BotFather) the card is posted by that bot with buttons:
+`⏸/▶️` pause / resume · `⏭` next · `⏹` stop · `🔁` repeat · `🔉 −20` / `🔊 +20` volume · `🔊 <n>` shows the volume · `📋` queue.
+A press needs the same role as the command (SUDO or higher in that group); others get "not allowed". The buttons follow the state (▶️ while paused) and disappear when the media ends.
+- **Groups:** add the bot to the group (it only needs to send messages). Where it is not a member, the account posts the card without buttons (checked again every 10 minutes).
+- **Private chat:** a bot can only write to people who started it: send `/start` to the bot once, else the card comes from the account without buttons.
+- The bot logs in by itself on start (`sessions/bot.session`); a wrong token only disables the buttons (see the log).
+
 ### Renaming commands – `commandmapper.py`
 Each command has a list of names; the first one is shown in texts. Names must be lowercase letters / digits / `_` (Persian letters work) and unique. Restart after editing.
 

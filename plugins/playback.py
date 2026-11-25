@@ -242,20 +242,23 @@ def register(app) -> None:
             chat_id = t.chat_id
         reply = m.reply_to_message
         if reply and reply.chat.id == chat_id:
-            if not (reply.from_user and reply.from_user.is_self):
+            if not (reply.from_user and (reply.from_user.is_self or reply.id in app.bot_sent.ids.get(chat_id, []))):
                 raise UserError("**I can only delete my own messages.**")
             ids = [reply.id]
         else:
-            ids = list(app.sent.ids.get(chat_id, []))
+            ids = list(app.sent.ids.get(chat_id, [])) + list(app.bot_sent.ids.get(chat_id, []))
         ids = [i for i in ids if not (m.chat.id == chat_id and i == m.id)]
         if not ids:
             raise UserError("**I have no messages to delete there.**")
-        for start in range(0, len(ids), 100):
-            try:
-                await client.delete_messages(chat_id, ids[start:start + 100])
-            except Exception:
-                pass
+        bot_ids = set(app.bot_sent.ids.get(chat_id, []))
+        for sender, part in ((client, [i for i in ids if i not in bot_ids]), (app.bot, [i for i in ids if i in bot_ids])):
+            for start in range(0, len(part), 100):
+                try:
+                    await sender.delete_messages(chat_id, part[start:start + 100])
+                except Exception:
+                    pass
         app.sent.forget(chat_id, ids)
+        app.bot_sent.forget(chat_id, ids)
         app.cards.forget(chat_id, ids)
         try:
             await m.delete()
