@@ -1,0 +1,20 @@
+{
+  "title": "Example Group",
+  "owners": [
+    {
+      "id": 444444444,
+      "name": "Example Group Owner",
+      "added_by": 999999999,
+      "added_at": "2026-01-01T12:00"
+    }
+  ],
+  "sudo": [
+    {
+      "id": 555555555,
+      "name": "Example SUDO",
+      "added_by": 444444444,
+      "added_at": "2026-01-01T12:00"
+    },
+    666666666
+  ]
+}

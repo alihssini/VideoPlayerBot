@@ -1,4 +1,5 @@
 import asyncio
+import os
 import pytest
 
 from core.errors import UserError
@@ -86,3 +87,18 @@ def test_card_buttons():
     assert rows[0][0].text == "▶️" and rows[0][3].text == "🔁 on" and rows[1][1].text == "🔊 140"
     state.playback = Playback(item("live", duration=None))
     assert not any(b.callback_data.startswith("vpb:l:") for b in keyboard(state).inline_keyboard[0])   # no loop for live
+
+
+def test_example_acl_files_load(tmp_path):
+    import shutil
+    from core.acl import AclService, Role
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    shutil.copytree(os.path.join(root, "examples", "acl"), tmp_path / "acl")
+    errors = []
+    acl = AclService(str(tmp_path), [999999999], on_error=errors.append)
+    assert acl.role(111111111, None) == Role.BOT_OWNER
+    assert acl.role(333333333, -1) == Role.SUDO                       # global, plain id
+    assert acl.role(444444444, -1001234567890) == Role.GROUP_OWNER
+    assert acl.role(666666666, -1001234567890) == Role.SUDO            # plain id in a group list
+    assert acl.target(444444444) == -1001234567890
+    assert not errors

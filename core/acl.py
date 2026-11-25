@@ -7,6 +7,7 @@ data/acl/groups/<chat_id>.json  {"title", "owners": [...], "sudo": [...]}       
 
 Root owners (the account itself + OWNER_USERS of .env) are bot owners that commands can never remove.
 A file with a JSON error is not loaded: the last good version stays active and on_error is told about it.
+Examples with fake ids: examples/acl/ (see examples/README.md).
 """
 
 import os

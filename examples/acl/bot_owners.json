@@ -1,0 +1,10 @@
+{
+  "users": [
+    {
+      "id": 111111111,
+      "name": "Example Bot Owner",
+      "added_by": 999999999,
+      "added_at": "2026-01-01T12:00"
+    }
+  ]
+}

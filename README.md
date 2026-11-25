@@ -27,11 +27,13 @@ Plays YouTube videos, songs by name, live streams, radios and Telegram audio / v
 
 `/help` shows exactly the commands the sender may use. Details: **[manual.md](manual.md)**.
 
+Configuration template: [`.env.sample`](.env.sample) · role file examples (fake ids): [`examples/acl/`](examples/acl/) — see [`examples/README.md`](examples/README.md).
+
 ## Setup
 
 ```bash
 ./setup.sh --with-service          # ffmpeg, fonts, Python 3.12 venv, dependencies, systemd unit
-nano .env                          # API_ID, API_HASH (https://my.telegram.org), OWNER_USERS
+cp -n .env.sample .env; nano .env  # API_ID, API_HASH (https://my.telegram.org), OWNER_USERS, optional BOT_TOKEN
 .venv/bin/python login.py          # once: log in with the code Telegram sends you
 systemctl start videoplayerbot
 ```

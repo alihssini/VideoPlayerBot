@@ -79,7 +79,7 @@ data/acl/dm_targets.json          {"123": -1001234567890}          (/use choice 
 data/acl/groups/<chat_id>.json    {"title": "...", "owners": [...], "sudo": [...]}
 data/acl/groups/left/             files of groups the account left (kept, not deleted)
 ```
-They are pretty-printed and can be edited by hand; plain ids are accepted in the lists. Changes are picked up on the next command (no restart). A file with a JSON error is **not** used — the previous version stays active and the root owners get a private message about it.
+Examples with fake ids: [`examples/acl/`](examples/acl/) (see [`examples/README.md`](examples/README.md)). They are pretty-printed and can be edited by hand; plain ids are accepted in the lists. Changes are picked up on the next command (no restart). A file with a JSON error is **not** used — the previous version stays active and the root owners get a private message about it.
 
 ```bash
 cd /root/VideoPlayerBot/data/acl
