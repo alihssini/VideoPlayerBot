@@ -127,6 +127,16 @@ class CardPresenter:
                         log.warning("FloodWait %ss while updating cards", e.value)
                         await asyncio.sleep(e.value)
 
+    async def repost(self, state: ChatState, chat_id: int, where: str | None) -> bool:
+        """/now: post the card of the current media again in chat_id (the older post of that chat is not updated any more)."""
+        card = self.cards.get(state.chat_id)
+        if not card or not state.playback:
+            return False
+        card.posts = [p for p in card.posts if p[0].chat.id != chat_id]
+        photo = await self._picture(state, card.item)
+        card.posts.append(await self._send(chat_id, build_caption(self._data(state, card, where)), photo, where))
+        return True
+
     def forget(self, chat_id: int, message_ids) -> None:
         """/delete removed some of our messages: stop editing those."""
         ids = set(message_ids)

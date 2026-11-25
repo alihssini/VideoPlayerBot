@@ -36,6 +36,7 @@ class MediaItem:
     requested_by: Requester | None = None
     reply_chat: int | None = None              # private chat it was requested from (gets its own card)
     lyrics: bool = False
+    origin: dict | None = None                 # how to get it again after a restart: {"url"} or {"chat", "msg"}
     files: list[str] = field(default_factory=list)   # files held by this item (reference counted)
     prepare: Callable[["MediaItem"], Awaitable[None]] | None = None  # lazy resolve (download / fresh URL)
     prepared_at: float = 0.0

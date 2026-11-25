@@ -23,13 +23,16 @@ PLAYBACK = [
     _line("lyrics", "<song>", "play the song as a video with synced lyrics (Persian works); alone: the song that plays now"),
     _line("pause", "", "pause"), _line("resume", "", "resume"),
     _line("next", "", "skip to the next queued item"), _line("queue", "", "what plays and what waits"),
+    _line("remove", "<n>", "remove item n of the queue"), _line("move", "<from> <to>", "move a queue item"),
+    _line("shuffle", "", "shuffle the queue"), _line("clear", "", "empty the queue, the current media goes on"),
+    _line("now", "", "post the now-playing card again"),
     _line("jump", "<30 | +2m | -10 | 1:30>", "move in the media (s / m / h; mm:ss goes to that time)"),
     _line("loop", "[on | off]", "repeat the current media"),
     _line("vol", "<1-200>", "volume (100 = normal)"),
     _line("delete", "", "delete the bot's messages here (or only the replied one)"),
     _line("end", "", "stop, clear the queue and leave the voice chat"),
     _line("download", "<name or link>", f"send the song as a file (`{mode('video')}` first for the video)"),
-    "• While something plays, new media joins the queue.",
+    "• While something plays, new media joins the queue. A YouTube playlist link adds its first videos.",
 ]
 GROUP_OWNER = [
     _line("sudolist", "", "SUDO users of this group"),
@@ -44,7 +47,8 @@ BOT_OWNER = [
     _line("botowners", "", "bot owners"), _line("addbotowner", "<…>", "root owners only: add a bot owner"),
     _line("delbotowner", "<…>", "root owners only: remove a bot owner"),
     _line("join", "<invite link | @username>", "join a group"), _line("leave", "[number]", "leave a group"),
-    _line("restart", "", "restart the app"),
+    _line("status", "", "health: uptime, voice chats, queues, disk, versions"),
+    _line("restart", "", "restart the app (what plays continues after it)"),
 ]
 GENERAL = [
     _line("list", "", "your groups, numbered"),

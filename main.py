@@ -77,7 +77,11 @@ async def main() -> None:
     app.files.wipe()                      # nothing plays at startup, leftovers are stale
     log.info("STARTED VIDEO PLAYER as %s (id %s)", me.first_name, me.id)
 
-    background = [asyncio.create_task(c) for c in (app.cards.ticker(app.store), app.recovery.watchdog(), app.files.sweeper())]
+    background = [asyncio.create_task(c) for c in (app.cards.ticker(app.store), app.recovery.watchdog(), app.files.sweeper(), app.idle.run())]
+    from app.restore import restore
+    saved = app.session.take()
+    if saved:
+        background.append(asyncio.create_task(restore(app, saved)))
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
@@ -85,7 +89,7 @@ async def main() -> None:
     await stop.wait()
 
     log.info("stopping: leaving the voice chats ...")
-    await app.player.shutdown()          # leave every voice chat, close the cards
+    await app.stop_all()                 # remember what plays, leave every voice chat, close the cards
     for task in background:
         task.cancel()
     await app.client.stop()

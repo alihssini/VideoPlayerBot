@@ -24,6 +24,17 @@ def _hash(text: str) -> str:
     return hashlib.sha1(text.encode()).hexdigest()[:16]
 
 
+class NullStatus:
+    """Status sink when nobody waits for an answer (restore after restart)."""
+
+    async def update(self, text: str) -> None:
+        pass
+
+
+def is_playlist(url: str) -> bool:
+    return "youtube.com/playlist" in url or ("list=" in url and "v=" not in url and "youtu.be/" not in url)
+
+
 class MediaResolver:
     def __init__(self, client, youtube: YouTube, files: FileStore, max_bytes: int):
         self.client, self.yt, self.files, self.max_bytes = client, youtube, files, max_bytes
@@ -67,7 +78,7 @@ class MediaResolver:
             await status.update("🔄 `Checking the stream ...`")
         info = await probe.inspect(query)
         kind = kind or (VIDEO if info and info["video"] else AUDIO)
-        return MediaItem(kind=kind, key="url_" + _hash(query), source=query, link=query,
+        return MediaItem(kind=kind, key="url_" + _hash(query), source=query, link=query, origin={"url": query, "kind": kind},
                          duration=info["duration"] if info else None, prepared_at=time.monotonic())
 
     async def _from_youtube(self, chat_id, url, kind, searched, status, eager) -> MediaItem:
@@ -78,7 +89,7 @@ class MediaResolver:
             raise UserError(f"**YouTube error!**\n\n`{clean(e)[:300]}`")
         item = MediaItem(kind=kind, key=f"yt_{info.id}_{'a' if kind == AUDIO else 'v' + str(self.yt.height)}",
                          title=info.title, artist=info.artist, duration=None if info.live else info.duration,
-                         link=None if searched else url)
+                         link=None if searched else url, origin={"url": url, "kind": kind, "searched": searched})
         if kind == AUDIO:
             item.source, item.prepared_at = info.url, time.monotonic()
         item.prepare = self._youtube_preparer(chat_id, url)
@@ -119,6 +130,39 @@ class MediaResolver:
             item.prepared_at = time.monotonic()
         return prepare
 
+    # ------------------------------------------------------------------------------------------- playlists
+
+    async def playlist(self, chat_id: int, url: str, kind: str | None, status, requester, limit: int) -> list[MediaItem]:
+        """The first `limit` videos of a YouTube playlist as lazy items (each is resolved when it is about to play)."""
+        await status.update("📃 `Reading the playlist ...`")
+        entries = await self.yt.playlist(url, limit)
+        if not entries:
+            raise UserError("**That playlist is empty or private.**")
+        kind = kind or AUDIO
+        items = []
+        for entry in entries:
+            item = MediaItem(kind=kind, key=f"yt_{entry.id}_{'a' if kind == AUDIO else 'v' + str(self.yt.height)}",
+                             title=entry.title, duration=entry.duration, link=entry.url, requested_by=requester,
+                             origin={"url": entry.url, "kind": kind})
+            item.prepare = self._youtube_preparer(chat_id, entry.url)
+            items.append(item)
+        return items
+
+    # --------------------------------------------------------------------------------------------- restore
+
+    async def restore(self, chat_id: int, origin: dict, eager: bool) -> MediaItem:
+        """The same media again after a restart (downloads/ is wiped at start, files are fetched again)."""
+        status = NullStatus()
+        kind = origin.get("kind")
+        if "url" in origin:
+            if is_youtube(origin["url"]):
+                return await self._from_youtube(chat_id, origin["url"], kind or VIDEO, bool(origin.get("searched")), status, eager)
+            return await self._from_query(chat_id, origin["url"], kind, status, eager)
+        media = await self.client.get_messages(origin["chat"], origin["msg"])
+        if not media or not tgm.kind_of(media):
+            raise UserError("the file is not there any more")
+        return await self._from_telegram(chat_id, media, kind, status)
+
     # --------------------------------------------------------------------------------------- telegram files
 
     async def _from_telegram(self, chat_id, media, kind, status) -> MediaItem:
@@ -129,7 +173,7 @@ class MediaResolver:
         dest = self.files.path(chat_id, key, tgm.extension_of(media))
         async with self.files.lock(dest):
             source = await tgm.download(self.client, media, dest, status)
-        item = MediaItem(kind=VIDEO, key=key)
+        item = MediaItem(kind=VIDEO, key=key, origin={"chat": media.chat.id, "msg": media.id})
         item.source = self.files.acquire(source)
         item.files.append(item.source)
         item.title, item.artist = tgm.title_of(media)
@@ -141,6 +185,7 @@ class MediaResolver:
                     raise UserError("**That file has no playable audio or video!**")
                 mk = VIDEO if info["video"] else AUDIO
             item.kind = kind or mk
+            item.origin["kind"] = item.kind
             item.duration = info["duration"] if info else None
             thumb_dest = self.files.path(chat_id, f"{key}_thumb", "jpg")
             thumbs = getattr(file, "thumbs", None)

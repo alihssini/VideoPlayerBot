@@ -80,6 +80,21 @@ class YouTube:
     async def search(self, query: str) -> Found | None:
         return await self._run(self._search, query)
 
+    # ---- playlist: flat list, no stream lookups ----
+    def _playlist(self, url: str, limit: int) -> list:
+        opts = {**_BASE, "noplaylist": False, "extract_flat": "in_playlist", "skip_download": True, "playlistend": limit}
+        with YoutubeDL(opts) as ydl:
+            raw = ydl.extract_info(url, download=False) or {}
+        out = []
+        for e in (raw.get("entries") or [])[:limit]:
+            if e and e.get("id") and e.get("live_status") not in ("is_live", "is_upcoming"):
+                out.append(Info(id=e["id"], title=e.get("title"), artist=_artist(e), thumb=None, duration=e.get("duration"),
+                                live=False, url=f"https://www.youtube.com/watch?v={e['id']}"))
+        return out
+
+    async def playlist(self, url: str, limit: int) -> list:
+        return await self._run(self._playlist, url, limit)
+
     # ---- metadata only (cheap, used when queueing) ----
     def _meta(self, url: str) -> Info:
         with YoutubeDL({**_BASE, "skip_download": True}) as ydl:

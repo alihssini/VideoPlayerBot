@@ -10,6 +10,7 @@ from core.player import fmt_time
 from core.timeparse import parse_jump
 from plugins.common import cmd, require_any, target
 from services.lyrics import LyricsUnavailable
+from services.resolver import is_playlist
 from ui.replies import Status, clean, command, say
 from ui.texts import USAGE_PLAY
 
@@ -18,17 +19,24 @@ def register(app) -> None:
     player, client = app.player, app.client
 
     async def _lyrics_for(item, chat_id, status) -> str | None:
-        """Turn a resolved song into its lyrics video (in place); returns a note when it stays as it is."""
-        if item.kind != AUDIO:
-            return "🎤 **Lyrics are for songs**, this one plays as it is."
-        await player.prepare(item)
-        try:
-            path = await app.lyrics.make(chat_id, item.source, item.name, item.duration, item.thumb, item.key, status)
-        except LyricsUnavailable as e:
-            return f"🎤 **Playing the music only**, {e}."
-        item.files.append(path)
-        item.source, item.kind, item.lyrics, item.prepare = path, VIDEO, True, None
-        return None
+        return await app.lyrics.apply(item, chat_id, status, player.prepare)
+
+    async def _playlist(m, t, url, kind, status):
+        state = app.store.get(t.chat_id)
+        free = player.max_queue - len(state.queue) + (0 if await player.is_playing(t.chat_id) else 1)
+        items = await app.resolver.playlist(t.chat_id, url, kind, status, t.user, max(1, free))
+        added = 0
+        for item in items:
+            if t.dm:
+                item.reply_chat = m.chat.id
+            try:
+                await player.enqueue(t.chat_id, t.title, item)
+                added += 1
+            except UserError:
+                break
+            except Exception as e:
+                await status.update(f"⚠️ `{clean(item.name)}`: {clean(e)[:100]}")
+        await status.done(f"📃 **{added} videos of the playlist** were added{t.where}." + ("" if added == len(items) else " The queue is full now."))
 
     async def _play(m, force=None, lyrics=False):
         t = await target(app, m, Role.SUDO, bare="with_more")
@@ -41,7 +49,9 @@ def register(app) -> None:
         if player.queue_full(t.chat_id):
             raise UserError(f"**The queue is full** ({player.max_queue} items)! Use {tag('next')} or wait.")
         eager = not await player.is_playing(t.chat_id)
-        async with Status(m) as status:
+        async with app.limiter.slot(t.user.id if t.user else None, exempt=t.role >= Role.BOT_OWNER), Status(m) as status:
+            if query.startswith("http") and is_playlist(query):
+                return await _playlist(m, t, query, kind, status)
             item = await app.resolver.resolve(m, t.chat_id, query, kind, status, t.user, eager)
             try:
                 if t.dm:
@@ -143,6 +153,50 @@ def register(app) -> None:
             lines += ["", f"__Nothing queued after this, send__ {tag('play')} __to add more.__"]
         await say(m, "\n".join(lines))
 
+    def _number(args, usage: str) -> list[int]:
+        try:
+            return [int(a) for a in args]
+        except ValueError:
+            raise UserError(usage)
+
+    @command
+    async def remove(_, m):
+        t = await target(app, m, bare="never")
+        numbers = _number(t.args[:1], f"__Which item?__ {tag('remove')} `2` (numbers from {tag('queue')})")
+        if not numbers:
+            raise UserError(f"__Which item?__ {tag('remove')} `2` (numbers from {tag('queue')})")
+        item = await player.queue_remove(t.chat_id, numbers[0])
+        await say(m, f"🗑 **Removed from the queue**{t.where}: `{clean(item.name)}`")
+
+    @command
+    async def move(_, m):
+        t = await target(app, m, bare="never")
+        usage = f"__Send__ {tag('move')} `<from> <to>`__, e.g.__ {tag('move')} `3 1` __(numbers from__ {tag('queue')}__)__"
+        numbers = _number(t.args[:2], usage)
+        if len(numbers) != 2:
+            raise UserError(usage)
+        item = await player.queue_move(t.chat_id, *numbers)
+        await say(m, f"↕️ **Moved**{t.where} `{clean(item.name)}` to #{max(1, numbers[1])}")
+
+    @command
+    async def shuffle(_, m):
+        t = await target(app, m)
+        count = await player.queue_shuffle(t.chat_id)
+        await say(m, f"🔀 **Shuffled** {count} queued items{t.where}.")
+
+    @command
+    async def clear(_, m):
+        t = await target(app, m)
+        count = await player.queue_clear(t.chat_id)
+        await say(m, f"🧹 **Queue cleared**{t.where} ({count} items), the current media goes on.")
+
+    @command
+    async def now(_, m):
+        t = await target(app, m)
+        state = app.store.peek(t.chat_id)
+        if not await player.is_playing(t.chat_id) or not state or not await app.cards.repost(state, m.chat.id, t.title if t.dm else None):
+            raise UserError(f"**Nothing is streaming**{t.where}!")
+
     @command
     async def jump(_, m):
         t = await target(app, m, bare="never")
@@ -210,5 +264,6 @@ def register(app) -> None:
 
     for key, handler in (("play", play), ("stream", stream), ("lyrics", lyrics), ("pause", pause), ("resume", resume),
                          ("next", next_), ("end", end), ("queue", queue), ("jump", jump), ("loop", loop), ("vol", vol),
-                         ("delete", delete)):
+                         ("delete", delete), ("remove", remove), ("move", move), ("shuffle", shuffle), ("clear", clear),
+                         ("now", now)):
         client.add_handler(MessageHandler(handler, cmd(key)))

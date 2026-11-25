@@ -8,6 +8,8 @@ from app.client import SentMessages, make_client
 from app.config import Settings, settings
 from core.acl import AclService
 from core.files import FileStore
+from core.idle import IdleWatcher
+from core.session import SessionFile
 from core.player import Player
 from core.recovery import Recovery
 from core.state import StateStore
@@ -18,6 +20,7 @@ from services.lyrics import LyricsMaker
 from services.resolver import MediaResolver
 from services.voice import VoiceService
 from services.youtube import YouTube
+from plugins.common import UserLimiter
 from ui.card import CardPresenter
 
 log = logging.getLogger("vpb.app")
@@ -39,8 +42,21 @@ class App:
     resolver: MediaResolver
     lyrics: LyricsMaker
     groups: GroupDirectory
+    limiter: UserLimiter
+    session: SessionFile
+    idle: IdleWatcher | None = None
     me_id: int = 0
+    started: float = field(default_factory=time.monotonic)
     _notified: dict = field(default_factory=dict)
+
+    async def stop_all(self) -> None:
+        """Remember what plays (it continues after the start), then leave every voice chat."""
+        try:
+            saved = self.session.save(self.store)
+            log.info("saved the playback of %d chats", saved)
+        except Exception:
+            log.exception("could not save the session")
+        await self.player.shutdown()
 
     def notify_owners(self, text: str) -> None:
         """Tell the root owners about a problem (an ACL file with a JSON error), at most once per hour per text."""
@@ -78,8 +94,10 @@ def build() -> App:
         settings=settings, client=client, sent=sent, files=files, store=store, voice=voice, acl=acl, cards=cards,
         player=player, recovery=Recovery(player, voice, store), youtube=youtube,
         resolver=MediaResolver(client, youtube, files, settings.max_bytes), lyrics=LyricsMaker(files, probe.to_jpg),
-        groups=GroupDirectory(client, acl),
+        groups=GroupDirectory(client, acl), limiter=UserLimiter(settings.user_parallel),
+        session=SessionFile(f"{settings.data_dir}/session.json"),
     )
+    app.idle = IdleWatcher(player, voice, store, settings.auto_leave_minutes, lambda: app.me_id)
     holder["app"] = app
     for plugin in (roles, groups, info, playback, download, nopm):
         plugin.register(app)

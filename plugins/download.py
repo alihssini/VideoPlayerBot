@@ -39,7 +39,7 @@ def register(app) -> None:
         query = " ".join(args).strip()
         if not query:
             raise UserError(USAGE)
-        async with Status(m) as status:
+        async with app.limiter.slot(uid, exempt=app.acl.is_bot_owner(uid)), Status(m) as status:
             if not query.startswith("http"):
                 await status.update("🔎 `Searching ...`")
                 found = await yt.search(query)

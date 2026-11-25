@@ -6,6 +6,7 @@ volume / source; seek, volume, loop, lyrics and the recovery all use it.
 """
 
 import time
+import random
 import asyncio
 import logging
 from core.errors import UserError
@@ -256,6 +257,58 @@ class Player:
             pb.item.source, pb.item.kind, pb.item.lyrics, pb.item.prepare = new_source, kind, True, None
             await self.events.changed(state, PAUSED if pb.paused else PLAYING)
 
+    # ---- queue management -------------------------------------------------------------------------------
+
+    def _queued(self, chat_id: int) -> ChatState:
+        state = self.store.peek(chat_id)
+        if not state or not state.queue:
+            raise UserError("**The queue is empty.**")
+        return state
+
+    @staticmethod
+    def _index(state: ChatState, number: int) -> int:
+        if not 1 <= number <= len(state.queue):
+            raise UserError(f"**There is no item {number}** in the queue (1-{len(state.queue)}).")
+        return number - 1
+
+    async def _refresh(self, state: ChatState) -> None:
+        self._prefetch(state)
+        if state.playback:
+            await self.events.changed(state, PAUSED if state.playback.paused else PLAYING)
+
+    async def queue_remove(self, chat_id: int, number: int) -> MediaItem:
+        state = self._queued(chat_id)
+        async with state.lock:
+            item = state.queue.pop(self._index(state, number))
+            self.discard(item)
+            await self._refresh(state)
+            return item
+
+    async def queue_move(self, chat_id: int, src: int, dst: int) -> MediaItem:
+        state = self._queued(chat_id)
+        async with state.lock:
+            item = state.queue.pop(self._index(state, src))
+            state.queue.insert(max(0, min(dst - 1, len(state.queue))), item)
+            await self._refresh(state)
+            return item
+
+    async def queue_shuffle(self, chat_id: int) -> int:
+        state = self._queued(chat_id)
+        async with state.lock:
+            random.shuffle(state.queue)
+            await self._refresh(state)
+            return len(state.queue)
+
+    async def queue_clear(self, chat_id: int) -> int:
+        state = self._queued(chat_id)
+        async with state.lock:
+            dropped = len(state.queue)
+            for item in state.queue:
+                self.discard(item)
+            state.queue.clear()
+            await self._refresh(state)
+            return dropped
+
     async def on_stream_end(self, chat_id: int, kinds: set) -> None:
         state = self.store.peek(chat_id)
         if not state or not state.active or state.playback.item.kind not in kinds:
@@ -277,12 +330,12 @@ class Player:
                     state.loop = False
             await self.advance_locked(state, FINISHED)
 
-    async def shutdown(self) -> None:
+    async def shutdown(self, label: str = "⏹ Stopped (restart)") -> None:
         """Leave every voice chat and close the cards (systemctl stop / restart)."""
         for state in self.store.active():
             try:
                 async with state.lock:
-                    await self.reset_locked(state, "⏹ Stopped (restart)")
+                    await self.reset_locked(state, label)
             except Exception:
                 log.exception("shutdown of %s failed", state.chat_id)
 

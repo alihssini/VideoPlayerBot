@@ -1,6 +1,8 @@
 """Shared by all command plugins: filters, the target group of a command and the permission check."""
 
 import re
+from collections import Counter
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pyrogram import filters
 from commandmapper import names, tag
@@ -11,6 +13,23 @@ from core.models import Requester
 from services.groups import GROUP_TYPES
 
 NUMBER = re.compile(r"#?-?\d+")
+
+
+class UserLimiter:
+    """At most `limit` running requests (/play, /download) per user; bot owners are not limited."""
+
+    def __init__(self, limit: int):
+        self.limit, self.running = limit, Counter()
+
+    @asynccontextmanager
+    async def slot(self, uid: int | None, exempt: bool = False):
+        if not exempt and uid is not None and self.running[uid] >= self.limit:
+            raise UserError(f"**Please wait**, you already have {self.limit} requests running.")
+        self.running[uid] += 1
+        try:
+            yield
+        finally:
+            self.running[uid] -= 1
 
 
 def cmd(key: str):

@@ -53,6 +53,8 @@ class Settings:
     video_quality: str
     max_queue: int
     progress_every: int
+    auto_leave_minutes: int     # leave when nobody else is in the voice chat this long (0 = never)
+    user_parallel: int          # requests (/play, /download) one user may run at the same time
     search_max_seconds: int
     lyrics_max_seconds: int
     lyrics_tolerance: int
@@ -89,6 +91,8 @@ def load() -> Settings:
         video_quality=quality,
         max_queue=_int("MAX_QUEUE", 10),
         progress_every=max(5, _int("PROGRESS_EVERY", 10)),
+        auto_leave_minutes=max(0, _int("AUTO_LEAVE_MINUTES", 10)),
+        user_parallel=max(1, _int("USER_PARALLEL", 2)),
         search_max_seconds=_int("SEARCH_MAX_MINUTES", 15) * 60,
         lyrics_max_seconds=_int("LYRICS_MAX_MINUTES", 15) * 60,
         lyrics_tolerance=_int("LYRICS_TOLERANCE", 10),

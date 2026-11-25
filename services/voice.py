@@ -67,6 +67,14 @@ class VoiceService:
             if not isinstance(e, NotInCallError):
                 log.warning("could not leave the call of %s: %s: %s", chat_id, type(e).__name__, e)
 
+    async def listeners(self, chat_id: int, me_id: int) -> int | None:
+        """People in the voice chat besides the account itself, or None when unknown."""
+        try:
+            people = await self.calls.get_participants(chat_id) or []
+        except Exception:
+            return None
+        return len([p for p in people if getattr(p, "user_id", None) != me_id])
+
     async def in_call(self, chat_id: int) -> bool | None:
         """True / False, or None when the engine cannot tell."""
         try:

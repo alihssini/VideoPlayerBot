@@ -278,6 +278,21 @@ class LyricsMaker:
     def __init__(self, files, to_jpg):
         self.files, self.to_jpg = files, to_jpg
 
+    async def apply(self, item, chat_id: int, status, prepare) -> str | None:
+        """Turn a resolved song into its lyrics video (in place); returns a note when it stays as it is."""
+        if item.kind != "audio":
+            return "🎤 **Lyrics are for songs**, this one plays as it is."
+        await prepare(item)
+        try:
+            path = await self.make(chat_id, item.source, item.name, item.duration, item.thumb, item.key, status)
+        except LyricsUnavailable as e:
+            return f"🎤 **Playing the music only**, {e}."
+        item.files.append(path)
+        item.source, item.kind, item.lyrics, item.prepare = path, "video", True, None
+        if item.origin is not None:
+            item.origin["lyrics"] = True
+        return None
+
     async def make(self, chat_id: int, source: str, title: str | None, length: float | None, cover: str | None,
                    key: str, status) -> str:
         """Path of the lyrics video, acquired for the caller. Raises LyricsUnavailable."""

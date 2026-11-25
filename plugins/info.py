@@ -2,13 +2,15 @@
 
 import os
 import sys
+import time
+import shutil
 import asyncio
 from pyrogram import filters
 from pyrogram.handlers import MessageHandler
 from core.acl import Role
 from core.errors import Silent
 from plugins.common import cmd, in_group, require_any, sender_id
-from ui.replies import command, say
+from ui.replies import clean, command, say
 from ui.texts import ABOUT, START, help_text
 
 
@@ -50,11 +52,32 @@ def register(app) -> None:
             await say(m, f"🆔 Your Telegram ID: `{m.from_user.id}`")
 
     @command
+    async def status(_, m):
+        if not acl.is_bot_owner(sender_id(app, m)):
+            raise Silent()
+        import yt_dlp
+        import pytgcalls
+        up = int(time.monotonic() - app.started)
+        lines = [f"🩺 **Status** · up {up // 86400}d {up % 86400 // 3600}h {up % 3600 // 60}m", ""]
+        active = app.store.active()
+        lines.append(f"🎧 **Voice chats:** {len(active)}")
+        for state in active:
+            pb = state.playback
+            lines.append(f"• {clean(state.title)}: `{clean(pb.item.name)[:50]}` · queue {len(state.queue)}"
+                         + (" · ⏸" if pb.paused else "") + (" · 🔁" if state.loop else ""))
+        size = sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(app.files.root) for f in fs)
+        disk = shutil.disk_usage(app.files.root)
+        lines += ["", f"💾 downloads: {size / 1048576:.0f} MB · disk free: {disk.free / 1073741824:.1f} of {disk.total / 1073741824:.1f} GB",
+                  f"👥 groups with roles: {len(acl.known_groups())} · global SUDO: {len(acl.global_sudo.ids())} · bot owners: {len(acl.root | acl.bot_owners.ids())}",
+                  f"📦 yt-dlp {yt_dlp.version.__version__} · py-tgcalls {pytgcalls.__version__} · quality {app.settings.video_quality}"]
+        await say(m, "\n".join(lines))
+
+    @command
     async def restart(_, m):
         if not acl.is_bot_owner(sender_id(app, m)):
             raise Silent()
-        await say(m, "🔄 `Restarting ...`")
-        await app.player.shutdown()
+        await say(m, "🔄 `Restarting ...` (what plays continues after the restart)")
+        await app.stop_all()
         await asyncio.sleep(2)
         os.execl(sys.executable, sys.executable, *sys.argv)
 
@@ -63,3 +86,4 @@ def register(app) -> None:
     client.add_handler(MessageHandler(about, cmd("about")))
     client.add_handler(MessageHandler(my_id, filters.private & cmd("id")), group=-1)
     client.add_handler(MessageHandler(restart, cmd("restart")))
+    client.add_handler(MessageHandler(status, cmd("status")))

@@ -27,6 +27,12 @@ COMMANDS = {
     "lyrics":    ["lyrics", "lyric", "متن", "شعر"],  # play a song as a video with its synced lyrics: /lyrics <song name>, or /lyrics alone for the song that plays now
     "loop":      ["loop", "repeat", "تکرار"],  # repeat the current media: /loop (on / off toggle), /loop on, /loop off
     "vol":       ["vol", "volume", "صدا"],   # voice chat volume of the bot: /vol 80 (1-200, 100 = normal)
+    "remove":    ["remove", "rm", "حذف_صف"],   # remove queue item n: /remove 2
+    "move":      ["move", "جابجا"],          # move queue item: /move 3 1
+    "shuffle":   ["shuffle", "مخلوط"],       # shuffle the queue
+    "clear":     ["clear", "پاکسازی"],       # empty the queue (the current media keeps playing)
+    "now":       ["now", "np", "الان"],      # post the now-playing card again
+    "status":    ["status", "وضعیت"],        # bot owners: health / status
     "delete":    ["delete", "del", "حذف"],   # delete the bot's messages (all of them, or only the replied one)
     "restart":   ["restart", "ریستارت"],    # restart the app
     "list":      ["list", "لیست"],       # numbered list of your groups (bot owners: all joined groups)
