@@ -74,8 +74,6 @@ def register(app) -> None:
                 level = max(1, min(200, current + (20 if action == "vu" else -20)))
                 await player.set_volume(chat_id, level, by)
                 text = f"🔊 Volume {level}"
-            elif action == "vi":
-                text = f"🔊 Volume {state.volume if state else 100} (1-200)"
             elif action == "q":
                 if not state or not state.playback:
                     raise UserError("Nothing is streaming!")

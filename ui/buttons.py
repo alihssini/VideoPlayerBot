@@ -17,6 +17,6 @@ def keyboard(state: ChatState) -> InlineKeyboardMarkup | None:
     if not pb.item.live:
         rows[0].append(b("🔁 on" if state.loop else "🔁", "l"))
         rows.append([b(f"{'⏪' if s < 0 else '⏩'} {abs(s)}", f"j{s:+d}") for s in SEEKS])
-    rows.append([b("🔉 −20", "vd"), b(f"🔊 {state.volume}", "vi"), b("🔊 +20", "vu"), b("📋", "q")]
+    rows.append([b("🔉 −20", "vd"), b("🔊 +20", "vu"), b("📋", "q")]
                 + ([] if pb.item.live else [b("⬇️", "dl")]))
     return InlineKeyboardMarkup(rows)

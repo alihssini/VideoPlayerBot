@@ -124,7 +124,7 @@ A rendered picture (blurred artwork, cover, title, artist, kind badge, length, g
 ▶️ Playing · 🎵 Audio
 **Artist - Title**
 `01:23 ━━━●────────── 04:56`
-👤 Requested by **Ali** · 🔁 Loop · 🔊 120
+👤 Requested by **Ali** · 🔁 Loop · 🔊 100
 ⏭ Next: Other song (+3 more)
 ```
 State changes name who did it ("⏸ Paused by **Sara**", "⏭ Skipped by …"). If a moderation bot deletes the card, playback goes on without it.
@@ -133,7 +133,7 @@ State changes name who did it ("⏸ Paused by **Sara**", "⏭ Skipped by …"). 
 With `BOT_TOKEN` in `.env` (a real bot from @BotFather) the card is posted by that bot with buttons:
 `⏸/▶️` pause / resume · `⏭` next · `⏹` stop · `🔁` repeat
 `⏪ 60` `⏪ 30` `⏩ 30` `⏩ 60` jump back / ahead (seconds)
-`🔉 −20` / `🔊 +20` volume · `🔊 <n>` shows the volume · `📋` queue · `⬇️` the playing media as a file (sent as a new message by the bot; YouTube is downloaded again, Telegram files / lyrics videos are sent directly).
+`🔉 −20` / `🔊 +20` volume (the current volume is in the card text) · `📋` queue · `⬇️` the playing media as a file (sent as a new message by the bot; YouTube is downloaded again, Telegram files / lyrics videos are sent directly).
 Live streams have no repeat / jump / download buttons.
 A press needs the same role as the command (SUDO or higher in that group); others get "not allowed". The buttons follow the state (▶️ while paused) and disappear when the media ends.
 - **Groups:** add the bot to the group (it only needs to send messages). Where it is not a member, the account posts the card without buttons (checked again every 10 minutes).

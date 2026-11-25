@@ -56,7 +56,7 @@ def build_caption(d: CaptionData) -> str:
         extras.append(f"👤 Requested by **{clean(d.requester)}**")
     if d.loop:
         extras.append("🔁 Loop")
-    if d.volume != 100:
+    if d.label.startswith(("▶️", "⏸")):      # while it plays (or is paused): always show the volume
         extras.append(f"🔊 {d.volume}")
     if extras:
         lines.append(" · ".join(extras))

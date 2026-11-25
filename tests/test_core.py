@@ -245,3 +245,11 @@ def test_failed_queue_item_is_skipped_and_files_released(tmp_path):
         assert ("failed", "bad") in events.log and player.store.get(-1).playback.item.title == "c"
         assert not os.path.exists(path)
     run(scenario())
+
+
+def test_caption_volume_only_while_playing():
+    base = dict(by=None, kind=AUDIO, lyrics=False, live=False, name="Song", link=None, pos=1, dur=100, requester=None,
+                loop=False, volume=100, next_name=None, more=0, where=None)
+    assert "🔊 100" in build_caption(CaptionData(label=PLAYING, **base))
+    assert "🔊 100" in build_caption(CaptionData(label=PAUSED, **base))
+    assert "🔊" not in build_caption(CaptionData(label="✅ Finished", **base))

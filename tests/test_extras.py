@@ -84,7 +84,7 @@ def test_card_buttons():
     state.playback.pause()
     state.loop, state.volume = True, 140
     rows = keyboard(state).inline_keyboard
-    assert rows[0][0].text == "▶️" and rows[0][3].text == "🔁 on" and rows[2][1].text == "🔊 140"
+    assert rows[0][0].text == "▶️" and rows[0][3].text == "🔁 on" and [b.text for b in rows[2]] == ["🔉 −20", "🔊 +20", "📋", "⬇️"]
     assert [b.callback_data for b in rows[1]] == ["vpb:j-60:-100123", "vpb:j-30:-100123", "vpb:j+30:-100123", "vpb:j+60:-100123"]
     assert rows[2][-1].callback_data == "vpb:dl:-100123"
     state.playback = Playback(item("live", duration=None))
