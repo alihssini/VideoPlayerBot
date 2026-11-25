@@ -1,4 +1,6 @@
-"""Files in downloads/<chat_id>/<key>.<ext> with reference counting.
+"""Files in downloads/chat_<chat_id>/<key>.<ext> with reference counting (the "chat_" prefix keeps names that
+start with "-" away from shell commands: `ls chat_-100…` works, `ls -100…` would be read as options).
+A chat folder is removed as soon as its last file is gone.
 
 The same media in the same chat has the same name, so queueing it several times keeps ONE file.
 A file is deleted when nothing (now playing / queued item / an upload in progress) holds it any more.
@@ -19,7 +21,7 @@ class FileStore:
         os.makedirs(self.root, exist_ok=True)
 
     def path(self, chat_id: int, key: str, ext: str) -> str:
-        folder = os.path.join(self.root, str(chat_id))
+        folder = os.path.join(self.root, f"chat_{chat_id}")
         os.makedirs(folder, exist_ok=True)
         return os.path.join(folder, f"{key}.{ext.lstrip('.')}")
 
@@ -61,12 +63,19 @@ class FileStore:
         if self.owns(path) and not self.in_use(path):
             self._remove(os.path.abspath(path))
 
-    @staticmethod
-    def _remove(path: str) -> None:
+    def _remove(self, path: str) -> None:
         try:
             os.remove(path)
         except OSError:
             pass
+        self._drop_empty_folder(os.path.dirname(path))
+
+    def _drop_empty_folder(self, folder: str) -> None:
+        if os.path.abspath(folder) != self.root:
+            try:
+                os.rmdir(folder)        # only succeeds when the folder is empty
+            except OSError:
+                pass
 
     def wipe(self) -> None:
         """Startup: nothing plays, everything left over is stale."""
@@ -85,6 +94,8 @@ class FileStore:
                         os.remove(path)
                 except OSError:
                     pass
+            if folder != self.root and not names:
+                self._drop_empty_folder(folder)
 
     async def sweeper(self, every: int = 1800, max_age: int = 6 * 3600) -> None:
         while True:

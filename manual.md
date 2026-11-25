@@ -145,7 +145,7 @@ Each command has a list of names; the first one is shown in texts. Names must be
 
 ## 8. Temp files / disk
 
-Downloads live in `downloads/<chat_id>/<media key>.<ext>`: the same media in the same chat is **one** file, also when it is queued several times. Files are reference counted and deleted when nothing plays or queues them any more; leftovers are swept every 30 minutes (older than 6 h) and the folder is wiped at start. `/status` shows the size.
+Downloads live in `downloads/chat_<chat_id>/<media key>.<ext>` (folder removed when it is empty): the same media in the same chat is **one** file, also when it is queued several times. Files are reference counted and deleted when nothing plays or queues them any more; leftovers are swept every 30 minutes (older than 6 h) and the folder is wiped at start. `/status` shows the size.
 
 ## 9. Update
 

@@ -121,6 +121,8 @@ def test_filestore_refcount_and_shared_name(tmp_path):
     assert os.path.exists(path)
     files.release(path)
     assert not os.path.exists(path)
+    assert os.path.basename(os.path.dirname(path)) == "chat_-100"
+    assert not os.path.exists(os.path.dirname(path))              # empty chat folder removed
     files.drop_unused("/etc/passwd")                              # outside the store: never touched
     assert os.path.exists("/etc/passwd")
 
